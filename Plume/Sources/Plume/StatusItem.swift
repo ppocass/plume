@@ -68,60 +68,27 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     @objc private func openHistory() { MainWindowController.shared.show(section: .history) }
     @objc private func openSettings() { MainWindowController.shared.show(section: .settings) }
 
-    /// La plume du logo, dessinée en image « modèle » (macOS la teinte selon la
-    /// barre des menus, claire ou sombre). Mêmes tracés que `Tools/icone-plume/plume.svg`.
+    /// Une plume au trait (style des symboles de macOS), en image « modèle » :
+    /// macOS la teinte selon la barre des menus. Tracé de
+    /// `Tools/icone-barre-menus/B.svg` (18 × 18).
     static let icon: NSImage = {
-        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: true) { rect in
-            let s: CGFloat = 0.0215
-            let t = NSAffineTransform()
-            t.translateX(by: rect.midX, yBy: rect.midY)
-            t.rotate(byDegrees: 36)
-            t.scale(by: s)
-            t.translateX(by: -519, yBy: -510)
-            t.concat()
-
-            func curve(_ p: NSBezierPath, _ c: [CGFloat]) {
-                p.curve(to: NSPoint(x: c[4], y: c[5]), controlPoint1: NSPoint(x: c[0], y: c[1]), controlPoint2: NSPoint(x: c[2], y: c[3]))
-            }
-            let left = NSBezierPath()
-            left.move(to: NSPoint(x: 540, y: 120))
-            curve(left, [470, 190, 432, 280, 425, 380])
-            left.line(to: NSPoint(x: 470, y: 384))
-            left.line(to: NSPoint(x: 423, y: 414))
-            curve(left, [420, 470, 426, 520, 440, 562])
-            left.line(to: NSPoint(x: 486, y: 556))
-            left.line(to: NSPoint(x: 448, y: 590))
-            curve(left, [462, 630, 482, 668, 512, 700])
-            curve(left, [520, 520, 530, 320, 540, 120])
-            left.close()
-            let right = NSBezierPath()
-            right.move(to: NSPoint(x: 540, y: 120))
-            curve(right, [585, 200, 612, 300, 615, 410])
-            right.line(to: NSPoint(x: 572, y: 430))
-            right.line(to: NSPoint(x: 614, y: 446))
-            curve(right, [612, 540, 588, 620, 512, 700])
-            curve(right, [520, 520, 530, 320, 540, 120])
-            right.close()
-
-            NSColor.black.setFill()
-            left.fill()
-            right.fill()
-            // Le rachis : creusé dans les barbes, plein pour le tuyau.
-            let rachis = NSBezierPath()
-            rachis.move(to: NSPoint(x: 538, y: 170))
-            curve(rachis, [528, 400, 518, 640, 500, 900])
-            rachis.lineCapStyle = .round
-            rachis.lineWidth = 0.85 / s
-            NSGraphicsContext.current?.compositingOperation = .destinationOut
-            NSBezierPath(rect: NSRect(x: 0, y: 0, width: 1024, height: 700)).addClip()
-            rachis.stroke()
-            NSGraphicsContext.current?.compositingOperation = .sourceOver
-            NSGraphicsContext.current?.saveGraphicsState()
-            NSBezierPath(rect: NSRect(x: 0, y: 690, width: 1024, height: 400)).setClip()
+        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: true) { _ in
             NSColor.black.setStroke()
-            rachis.lineWidth = 1.5 / s
-            rachis.stroke()
-            NSGraphicsContext.current?.restoreGraphicsState()
+            let vane = NSBezierPath()
+            vane.move(to: NSPoint(x: 15.4, y: 2.4))
+            vane.curve(to: NSPoint(x: 5.1, y: 12.2), controlPoint1: NSPoint(x: 10.2, y: 2.6), controlPoint2: NSPoint(x: 5.8, y: 6.4))
+            vane.line(to: NSPoint(x: 5.9, y: 13))
+            vane.curve(to: NSPoint(x: 15.4, y: 2.4), controlPoint1: NSPoint(x: 11.3, y: 12.4), controlPoint2: NSPoint(x: 15.2, y: 8.2))
+            vane.close()
+            vane.lineWidth = 1.3
+            vane.lineJoinStyle = .round
+            vane.stroke()
+            let shaft = NSBezierPath()
+            shaft.move(to: NSPoint(x: 13.6, y: 4.2))
+            shaft.line(to: NSPoint(x: 2.6, y: 15.4))
+            shaft.lineWidth = 1.3
+            shaft.lineCapStyle = .round
+            shaft.stroke()
             return true
         }
         image.isTemplate = true

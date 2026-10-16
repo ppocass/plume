@@ -22,6 +22,8 @@ On first launch Plume downloads its speech model (about 630 MB for the default o
 - Press it twice quickly to cancel.
 - No text field under the cursor? The text is kept in History and a click copies it.
 
+Say "new line", "new paragraph", "open parenthesis ... close parenthesis" or "question mark" and Plume types them (French works too: "à la ligne", "ouvrez la parenthèse"...). You can turn voice commands off in Settings.
+
 Prefer another key? Pick any shortcut in Settings. With fn, set System Settings > Keyboard > "Press 🌐 key to" to "Do Nothing" so macOS doesn't open the emoji picker at the same time.
 
 ## Models

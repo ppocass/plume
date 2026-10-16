@@ -47,7 +47,7 @@ final class Updater: ObservableObject {
     }
 
     var isSupported: Bool { Bundle.main.bundleIdentifier == Self.publicBundleID }
-    static var currentVersion: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0" }
+    nonisolated static var currentVersion: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0" }
 
     /// « 1.10 » > « 1.9 » ; les parties manquantes valent 0.
     nonisolated static func isNewer(_ a: String, than b: String) -> Bool {
@@ -119,40 +119,67 @@ final class Updater: ObservableObject {
     func install() async {
         guard let release = latest, isSupported else { return }
         let appURL = Bundle.main.bundleURL
-        let path = appURL.path
-        // Lancée depuis l'image disque ou « mise en quarantaine » par macOS : rien à remplacer.
-        if path.hasPrefix("/Volumes/") || path.contains("/AppTranslocation/")
-            || !FileManager.default.isWritableFile(atPath: appURL.deletingLastPathComponent().path) {
-            state = .failed(Failure.badLocation.localizedDescription)
-            return
-        }
         state = .downloading
         do {
-            let (tmp, response) = try await URLSession.shared.download(from: release.dmg)
-            guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw Failure.noAsset }
-            let work = try FileManager.default.url(for: .itemReplacementDirectory, in: .userDomainMask,
-                                                   appropriateFor: appURL, create: true)
-            let dmg = work.appendingPathComponent("Plume.dmg")
-            try FileManager.default.moveItem(at: tmp, to: dmg)
-            if let expected = release.sha256, try ModelDownloader.sha256(of: dmg) != expected { throw Failure.checksum }
-
-            state = .installing
-            let mount = work.appendingPathComponent("volume", isDirectory: true)
-            try FileManager.default.createDirectory(at: mount, withIntermediateDirectories: true)
-            guard Self.run("/usr/bin/hdiutil", ["attach", "-nobrowse", "-readonly", "-noverify", "-mountpoint", mount.path, dmg.path]) else {
-                throw Failure.mount
+            try await Self.performInstall(release, replacing: appURL) { [weak self] in
+                Task { @MainActor in self?.state = .installing }
             }
-            defer { _ = Self.run("/usr/bin/hdiutil", ["detach", "-quiet", mount.path]) }
-            let fresh = work.appendingPathComponent("Plume.app")
-            try FileManager.default.copyItem(at: mount.appendingPathComponent("Plume.app"), to: fresh)
-            guard Self.signedLikeMe(fresh) else { throw Failure.signature }
-
-            _ = try FileManager.default.replaceItemAt(appURL, withItemAt: fresh)
             Log.info("mise à jour installée : \(release.version), redémarrage")
             relaunch(appURL)
         } catch {
             Log.info("mise à jour impossible : \(error.localizedDescription)")
             state = .failed(error.localizedDescription)
+        }
+    }
+
+    /// Télécharge, vérifie (empreinte, signature) et met la nouvelle app à la
+    /// place de `appURL`.
+    nonisolated static func performInstall(_ release: Release, replacing appURL: URL,
+                                           installing: @escaping @Sendable () -> Void = {}) async throws {
+        let path = appURL.path
+        // Lancée depuis l'image disque ou « mise en quarantaine » par macOS : rien à remplacer.
+        if path.hasPrefix("/Volumes/") || path.contains("/AppTranslocation/")
+            || !FileManager.default.isWritableFile(atPath: appURL.deletingLastPathComponent().path) {
+            throw Failure.badLocation
+        }
+        let (tmp, response) = try await URLSession.shared.download(from: release.dmg)
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw Failure.noAsset }
+        let work = try FileManager.default.url(for: .itemReplacementDirectory, in: .userDomainMask,
+                                               appropriateFor: appURL, create: true)
+        defer { try? FileManager.default.removeItem(at: work) }
+        let dmg = work.appendingPathComponent("Plume.dmg")
+        try FileManager.default.moveItem(at: tmp, to: dmg)
+        if let expected = release.sha256, try ModelDownloader.sha256(of: dmg) != expected { throw Failure.checksum }
+
+        installing()
+        let mount = work.appendingPathComponent("volume", isDirectory: true)
+        try FileManager.default.createDirectory(at: mount, withIntermediateDirectories: true)
+        guard run("/usr/bin/hdiutil", ["attach", "-nobrowse", "-readonly", "-noverify", "-mountpoint", mount.path, dmg.path]) else {
+            throw Failure.mount
+        }
+        let fresh = work.appendingPathComponent("Plume.app")
+        do {
+            try FileManager.default.copyItem(at: mount.appendingPathComponent("Plume.app"), to: fresh)
+        } catch {
+            run("/usr/bin/hdiutil", ["detach", "-quiet", mount.path])
+            throw Failure.copy(error.localizedDescription)
+        }
+        run("/usr/bin/hdiutil", ["detach", "-quiet", mount.path])
+        guard signedLikeMe(fresh) else { throw Failure.signature }
+        _ = try FileManager.default.replaceItemAt(appURL, withItemAt: fresh)
+    }
+
+    /// `Plume --update-install-test <copie de Plume.app>` : la vraie
+    /// installation de la dernière version, sur une copie de l'app.
+    nonisolated static func installTest(_ target: String) async -> Int32 {
+        do {
+            let r = try await fetchLatest()
+            try await performInstall(r, replacing: URL(fileURLWithPath: target))
+            print("✅ \(target) remplacée par la version \(r.version)")
+            return 0
+        } catch {
+            print("❌ \(error.localizedDescription)")
+            return 1
         }
     }
 
@@ -246,4 +273,27 @@ final class Updater: ObservableObject {
         let version = tag.hasPrefix("v") ? String(tag.dropFirst()) : tag
         return Release(version: version, dmg: link, sha256: sha)
     }
+}
+
+/// « Signaler un problème » : ouvre un ticket GitHub prérempli avec la
+/// version, macOS, la puce et le modèle. Jamais de texte dicté ni de clé.
+enum IssueReporter {
+    @MainActor static var url: URL {
+        let model = ModelStore.active
+        let body = """
+        **What happened / Ce qui s'est passé :**
+
+
+        **What you expected / Ce qui était attendu :**
+
+
+        ---
+        Plume \(Updater.currentVersion) · macOS \(ProcessInfo.processInfo.operatingSystemVersionString) · \(Setup.chipName), \(Setup.memoryGB) GB · \(model.id)
+        """
+        var c = URLComponents(string: "https://github.com/\(Updater.repo)/issues/new")!
+        c.queryItems = [URLQueryItem(name: "body", value: body)]
+        return c.url!
+    }
+
+    @MainActor static func open() { NSWorkspace.shared.open(url) }
 }

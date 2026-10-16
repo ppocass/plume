@@ -42,9 +42,15 @@ struct SettingsView: View {
                     ForEach(DictationLanguage.allCases) { Text($0.label).tag($0) }
                 }
                 .focusable(false)
+                MicrophonePicker()
+                Toggle(L("Commandes vocales", "Voice commands"), isOn: $prefs.voiceCommands)
             } header: {
                 Text(L("Dictée", "Dictation"))
             } footer: {
+                if prefs.voiceCommands {
+                    Text(L("« à la ligne », « nouveau paragraphe », « ouvrez / fermez la parenthèse », « ouvrez / fermez les guillemets », « point d'interrogation », « point d'exclamation », « deux points », « point-virgule ».",
+                           "“new line”, “new paragraph”, “open / close parenthesis”, “open / close quote”, “question mark”, “exclamation mark”, “semicolon”."))
+                }
                 if ModelStore.active.family == .whisper && prefs.language == .auto {
                     Text(L("Avec Whisper, choisir la langue est plus fiable.", "With Whisper, choosing the language is more reliable."))
                 }
@@ -119,6 +125,7 @@ struct SettingsView: View {
                 Button(L("Revoir la configuration…", "Run Setup Again…")) {
                     OnboardingWindowController.shared.show()
                 }
+                Button(L("Signaler un problème…", "Report a Problem…")) { IssueReporter.open() }
             }
         }
         .formStyle(.grouped)
@@ -420,5 +427,26 @@ struct UpdateStatus: View {
 
     private var checkButton: some View {
         Button(L("Rechercher", "Check Now")) { Task { await updater.check(userInitiated: true) } }
+    }
+}
+
+/// « Micro » : celui de macOS (par défaut) ou un périphérique précis. Utile
+/// pour dicter avec le micro du Mac en gardant des AirPods pour écouter (sinon
+/// macOS les passe en mode appel, et le son baisse en qualité).
+struct MicrophonePicker: View {
+    @EnvironmentObject var prefs: Prefs
+    @State private var devices: [AudioDevices.Device] = []
+
+    var body: some View {
+        Picker(L("Micro", "Microphone"), selection: $prefs.microphoneUID) {
+            Text(L("Celui de macOS", "macOS default")).tag("")
+            ForEach(devices, id: \.uid) { Text($0.name).tag($0.uid) }
+            // Un micro choisi mais débranché reste visible.
+            if !prefs.microphoneUID.isEmpty && !devices.contains(where: { $0.uid == prefs.microphoneUID }) {
+                Text(L("Micro débranché", "Disconnected microphone")).tag(prefs.microphoneUID)
+            }
+        }
+        .focusable(false)
+        .onAppear { devices = AudioDevices.inputs() }
     }
 }

@@ -31,6 +31,14 @@ final class AudioRecorder: @unchecked Sendable {
 
         let engine = AVAudioEngine()
         let input = engine.inputNode
+        // Micro choisi dans les réglages (sinon celui de macOS). S'il n'est
+        // plus branché, on reste sur celui de macOS.
+        if let uid = UserDefaults.standard.string(forKey: "microphoneUID"), !uid.isEmpty,
+           var device = AudioDevices.deviceID(forUID: uid), let unit = input.audioUnit {
+            let status = AudioUnitSetProperty(unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0,
+                                              &device, UInt32(MemoryLayout<AudioDeviceID>.size))
+            if status != noErr { Log.info("micro choisi indisponible (\(status)) : celui de macOS") }
+        }
         let format = input.outputFormat(forBus: 0)
         guard format.sampleRate > 0, format.channelCount > 0 else { throw RecorderError.noInput }
         converter = AVAudioConverter(from: format, to: target)

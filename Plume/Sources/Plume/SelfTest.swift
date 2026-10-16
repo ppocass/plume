@@ -70,7 +70,8 @@ enum SelfTest {
                                                                       prompt: usePrompt ? vocab.whisperPrompt : nil)
                 print("  \(engine.model.id), \(pieces.count) morceau·x")
                 let parts = pieces.texts
-                let raw = usePrompt ? vocab.apply(to: parts.joined(separator: " ")) : parts.joined(separator: " ")
+                var raw = usePrompt ? vocab.apply(to: parts.joined(separator: " ")) : parts.joined(separator: " ")
+                if VoiceCommands.enabled { raw = VoiceCommands.apply(to: raw) }
                 print(String(format: "  Texte (%.2f s) : %@", Date().timeIntervalSince(started), raw))
                 let p0 = Date()
                 if let polished = await Polisher.polish(raw, language: .fr, spelling: usePrompt ? vocab.spellingList : "") {

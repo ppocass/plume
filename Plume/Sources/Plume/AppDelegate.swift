@@ -16,6 +16,11 @@ enum PlumeMain {
             Task { exit(await SelfTest.download(id)) }
             dispatchMain()
         }
+        if let i = args.firstIndex(of: "--update-install-test"), i + 1 < args.count {
+            let target = args[i + 1]
+            Task { exit(await Updater.installTest(target)) }
+            dispatchMain()
+        }
         if args.contains("--update-dry-run") {
             Task { exit(await Updater.dryRun()) }
             dispatchMain()
@@ -182,6 +187,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: Menus
 
     @objc private func openSettings() { MainWindowController.shared.show(section: .settings) }
+    @objc private func reportIssue() { IssueReporter.open() }
     @objc private func checkUpdates() {
         MainWindowController.shared.show(section: .settings)
         Task { await Updater.shared.check(userInitiated: true) }
@@ -201,6 +207,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let update = appMenu.addItem(withTitle: L("Rechercher les mises à jour…", "Check for Updates…"), action: #selector(checkUpdates), keyEquivalent: "")
             update.target = self
         }
+        let report = appMenu.addItem(withTitle: L("Signaler un problème…", "Report a Problem…"), action: #selector(reportIssue), keyEquivalent: "")
+        report.target = self
         appMenu.addItem(.separator())
         let settings = appMenu.addItem(withTitle: L("Réglages…", "Settings…"), action: #selector(openSettings), keyEquivalent: ",")
         settings.target = self

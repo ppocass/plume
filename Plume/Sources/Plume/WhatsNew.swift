@@ -14,6 +14,14 @@ struct ReleaseNotes {
     let pages: [Page]
 
     static let all: [ReleaseNotes] = [
+        ReleaseNotes(version: "1.4", pages: [
+            Page(symbol: "text.append", titleFR: "Commandes vocales", titleEN: "Voice commands",
+                 textFR: "Dites « à la ligne », « nouveau paragraphe », « ouvrez la parenthèse… fermez la parenthèse » ou « point d'interrogation ». Réglages → Dictée.",
+                 textEN: "Say “new line”, “new paragraph”, “open parenthesis… close parenthesis” or “question mark”. Settings → Dictation."),
+            Page(symbol: "mic", titleFR: "Choix du micro", titleEN: "Choose your microphone",
+                 textFR: "Dictez avec le micro du Mac en gardant vos AirPods pour écouter. Réglages → Dictée → Micro.",
+                 textEN: "Dictate with the Mac's microphone while your AirPods stay on for listening. Settings → Dictation → Microphone."),
+        ]),
         ReleaseNotes(version: "1.3", pages: [
             Page(symbol: "cpu", titleFR: "Choisissez votre modèle", titleEN: "Choose your model",
                  textFR: "Parakeet Ultra, Whisper jusqu'à Large v3 pour les Mac puissants, ou un service en ligne avec votre clé. Page Modèles.",

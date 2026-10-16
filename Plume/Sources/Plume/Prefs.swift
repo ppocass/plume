@@ -180,6 +180,14 @@ final class Prefs: ObservableObject {
     @Published var sttModel: String {
         didSet { defaults.set(sttModel, forKey: "sttModel_\(sttService.rawValue)") }
     }
+    /// Micro choisi (UID CoreAudio), vide = celui de macOS.
+    @Published var microphoneUID: String {
+        didSet { defaults.set(microphoneUID, forKey: "microphoneUID") }
+    }
+    /// « à la ligne », « ouvrez la parenthèse »… transformés en mise en forme.
+    @Published var voiceCommands: Bool {
+        didSet { defaults.set(voiceCommands, forKey: "voiceCommands") }
+    }
     /// Langue de la consigne du nettoyage.
     @Published var polishPrompt: PromptLanguage {
         didSet { defaults.set(polishPrompt.rawValue, forKey: "polishPrompt") }
@@ -231,6 +239,8 @@ final class Prefs: ObservableObject {
         sttModel = defaults.string(forKey: "sttModel_\(stt.rawValue)") ?? ""
         showInMenuBar = defaults.bool(forKey: "showInMenuBar")
         engineIdle = Prefs.idleSeconds
+        microphoneUID = defaults.string(forKey: "microphoneUID") ?? ""
+        voiceCommands = defaults.object(forKey: "voiceCommands") as? Bool ?? true
         // Installée avant la consigne anglaise : on garde la consigne française, déjà éprouvée.
         if defaults.string(forKey: "polishPrompt") == nil && defaults.bool(forKey: "onboardingDone") {
             defaults.set(PromptLanguage.fr.rawValue, forKey: "polishPrompt")

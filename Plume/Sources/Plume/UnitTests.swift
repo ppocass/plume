@@ -23,6 +23,7 @@ enum UnitTests {
         shortcuts()
         filter()
         updates()
+        commands()
         print("\(passed) vérifications réussies, \(failures) échec(s)")
         return Int32(failures)
     }
@@ -156,10 +157,32 @@ enum UnitTests {
         let r = try? Updater.parse(Data(json.utf8))
         check(r?.version == "1.3" && r?.dmg.lastPathComponent == "Plume.dmg", "release lue (version, fichier)")
         check(r?.sha256 == "f28fd2cb01e87aa4a83c9d4c625e4f964abebe55acd4a99612e3bd251d8619de", "empreinte lue dans les notes")
-        check(ReleaseNotes.pages(from: "1.2.2", to: "1.3").count == 4, "nouveautés 1.2.2 → 1.3")
+        check(ReleaseNotes.pages(from: "1.2.2", to: "1.3").count == 4 && ReleaseNotes.pages(from: "1.3", to: "1.4").count == 2, "nouveautés par version")
         check(ReleaseNotes.pages(from: "1.3", to: "1.3.1").isEmpty, "pas de nouveautés pour une petite version")
         let fr = Polisher.promptEN(for: .en)
         check(fr.contains("Reply with the cleaned text only") && fr.contains("in English"), "consigne anglaise")
+    }
+
+    static func commands() {
+        let cases: [(String, String)] = [
+            ("Bonjour. À la ligne. Comment ça va ?", "Bonjour.\nComment ça va ?"),
+            ("Bonjour, à la ligne, comment ça va", "Bonjour\nComment ça va"),
+            ("Premier point. Nouveau paragraphe. Deuxième point.", "Premier point.\n\nDeuxième point."),
+            ("Le rendez-vous, ouvrez la parenthèse, mardi, fermez la parenthèse, est confirmé.", "Le rendez-vous (mardi) est confirmé."),
+            ("Tu viens demain, point d'interrogation.", "Tu viens demain ?"),
+            ("Tu viens demain point d'interrogation", "Tu viens demain ?"),
+            ("Il a dit ouvrez les guillemets bonjour fermez les guillemets.", "Il a dit « bonjour »."),
+            ("First item. New line. Second item.", "First item.\nSecond item."),
+            ("See the docs, open parenthesis, page two, close parenthesis.", "See the docs (page two)."),
+            ("Are you coming question mark", "Are you coming?"),
+            ("Can you come? Question mark", "Can you come?"),
+            ("Rien de spécial ici.", "Rien de spécial ici."),
+            ("Une parenthèse dans la phrase.", "Une parenthèse dans la phrase."),
+        ]
+        for (input, expected) in cases {
+            let out = VoiceCommands.apply(to: input)
+            check(out == expected, "commande : « \(input) » → « \(out) » (attendu « \(expected) »)")
+        }
     }
 
     static func filter() {

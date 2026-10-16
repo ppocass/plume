@@ -291,7 +291,8 @@ final class DictationController: ObservableObject {
                 return
             }
         }
-        let raw = vocabulary.apply(to: parts.joined(separator: " "))
+        var raw = vocabulary.apply(to: parts.joined(separator: " "))
+        if VoiceCommands.enabled { raw = VoiceCommands.apply(to: raw) }
         Log.info(String(format: "%@ : %.1f s d'audio (%d morceau·x, %d déjà faits pendant la dictée) — %.2f s après la fin, %d caractères",
                         engine.model.id, seconds, chunkCount, live?.chunks ?? 0, Date().timeIntervalSince(started), raw.count))
         guard !raw.isEmpty else {

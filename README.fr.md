@@ -22,6 +22,8 @@ Au premier lancement, Plume télécharge son modèle de voix (environ 630 Mo pou
 - Deux appuis rapides annulent.
 - Pas de champ de texte sous le curseur ? Le texte est gardé dans l'Historique, un clic le copie.
 
+Dites « à la ligne », « nouveau paragraphe », « ouvrez la parenthèse … fermez la parenthèse » ou « point d'interrogation », et Plume les met en forme (en anglais aussi : "new line", "open parenthesis"…). Les commandes vocales se désactivent dans les Réglages.
+
 Le raccourci se change dans les Réglages, n'importe quelle touche convient. Avec fn, réglez Réglages Système > Clavier > « Appuyer sur la touche 🌐 » sur « Ne rien faire », sinon macOS ouvre aussi les emojis.
 
 ## Modèles
