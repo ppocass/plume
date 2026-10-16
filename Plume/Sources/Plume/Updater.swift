@@ -223,6 +223,7 @@ final class Updater: ObservableObject {
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("Plume/\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "")", forHTTPHeaderField: "User-Agent")
         request.timeoutInterval = 20
+        request.cachePolicy = .reloadIgnoringLocalCacheData   // sinon une réponse d'il y a une minute
         let (data, response) = try await URLSession.shared.data(for: request)
         guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw Failure.noAsset }
         return try parse(data)
