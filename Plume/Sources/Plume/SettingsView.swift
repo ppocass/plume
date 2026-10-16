@@ -14,9 +14,11 @@ struct SettingsView: View {
                 Picker(L("Langue", "Language"), selection: $prefs.appLanguage) {
                     ForEach(AppLanguage.allCases) { Text($0.label).tag($0) }
                 }
+                .focusable(false)
                 Picker(L("Apparence", "Appearance"), selection: $prefs.appearance) {
                     ForEach(AppAppearance.allCases) { Text($0.label).tag($0) }
                 }
+                .focusable(false)
                 Toggle(L("Ouvrir à la connexion", "Open at login"), isOn: Binding(
                     get: { permissions.launchAtLogin },
                     set: { permissions.setLaunchAtLogin($0) }))
@@ -38,6 +40,7 @@ struct SettingsView: View {
                 Picker(L("Langue parlée", "Spoken language"), selection: $prefs.language) {
                     ForEach(DictationLanguage.allCases) { Text($0.label).tag($0) }
                 }
+                .focusable(false)
             } header: {
                 Text(L("Dictée", "Dictation"))
             } footer: {
@@ -80,6 +83,7 @@ struct SettingsView: View {
                         Text(v < 0 ? L("Jamais", "Never") : v < 60 ? "\(Int(v)) s" : "\(Int(v / 60)) min").tag(v)
                     }
                 }
+                .focusable(false)
             } header: {
                 Text(L("Moteur", "Engine"))
             } footer: {
@@ -119,6 +123,7 @@ struct PolishServiceRows: View {
         Picker(L("Service", "Service"), selection: $prefs.polishService) {
             ForEach(PolishService.available) { Text($0.label).tag($0) }
         }
+        .focusable(false)
         if prefs.polishService == .custom {
             TextField(L("Adresse", "URL"), text: $prefs.polishCustomURL, prompt: Text("https://…/v1"))
         }

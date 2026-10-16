@@ -135,6 +135,8 @@ struct MainView: View {
         }
         // Changer de langue redessine toute la fenêtre.
         .id(prefs.appLanguage)
+        // Aucun cadre de focus visible (le 1er sélecteur des Réglages en recevait un).
+        .focusEffectDisabled()
     }
 }
 

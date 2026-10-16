@@ -138,6 +138,7 @@ struct CloudModelSection: View {
         Picker(L("Service", "Service"), selection: $prefs.sttService) {
             ForEach(TranscriptionService.allCases) { Text($0.label).tag($0) }
         }
+        .focusable(false)
         if prefs.sttService == .custom {
             TextField(L("Adresse", "URL"), text: $prefs.sttCustomURL, prompt: Text("https://…/v1"))
         }

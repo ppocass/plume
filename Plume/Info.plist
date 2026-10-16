@@ -2,50 +2,43 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleName</key>
-    <string>Plume</string>
-    <key>CFBundleDisplayName</key>
-    <string>Plume</string>
-    <key>CFBundleIdentifier</key>
-    <string>io.github.ppocass.plume</string>
-    <key>CFBundleVersion</key>
-    <string>3</string>
-    <key>CFBundleShortVersionString</key>
-    <string>1.2</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleExecutable</key>
-    <string>Plume</string>
-    <key>CFBundleIconFile</key>
-    <string>AppIcon</string>
-    <key>CFBundleDevelopmentRegion</key>
-    <string>en</string>
-    <key>CFBundleLocalizations</key>
-    <array>
-        <string>en</string>
-        <string>fr</string>
-    </array>
-    <key>LSMinimumSystemVersion</key>
-    <string>14.0</string>
-    <!-- Pas d'icône dans le Dock au repos : Plume vit en arrière-plan.
-         Elle apparaît dans le Dock seulement quand sa fenêtre est ouverte. -->
-    <key>LSUIElement</key>
-    <true/>
-    <key>NSMicrophoneUsageDescription</key>
-    <string>Plume uses the microphone to turn what you say into text.</string>
-    <!-- Tout passe en https, sauf un serveur choisi par l'utilisateur sur ce
-         Mac ou sur un réseau privé (localhost, 10/8, 172.16/12, 192.168/16,
-         100.64/10, .local). macOS n'a pas d'exception pour des plages
-         d'adresses IP (NSAllowsLocalNetworking ne couvre pas les IP) : c'est
-         donc l'app qui refuse le http vers Internet (EndpointPolicy). -->
-    <key>NSAppTransportSecurity</key>
-    <dict>
-        <key>NSAllowsArbitraryLoads</key>
-        <true/>
-    </dict>
-    <key>NSHighResolutionCapable</key>
-    <true/>
-    <key>LSApplicationCategoryType</key>
-    <string>public.app-category.productivity</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>Plume</string>
+	<key>CFBundleExecutable</key>
+	<string>Plume</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
+	<key>CFBundleIdentifier</key>
+	<string>io.github.ppocass.plume</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>fr</string>
+	</array>
+	<key>CFBundleName</key>
+	<string>Plume</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.2.1</string>
+	<key>CFBundleVersion</key>
+	<string>4</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.productivity</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Plume uses the microphone to turn what you say into text.</string>
 </dict>
 </plist>
