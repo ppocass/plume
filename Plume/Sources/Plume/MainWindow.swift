@@ -23,6 +23,7 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         Task { await SpeechEngine.shared.refreshState() }
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        window?.clearInitialFocus()
     }
 
     private func build() {
@@ -135,8 +136,9 @@ struct MainView: View {
         }
         // Changer de langue redessine toute la fenêtre.
         .id(prefs.appLanguage)
-        // Aucun cadre de focus visible (le 1er sélecteur des Réglages en recevait un).
         .focusEffectDisabled()
+        // Nouvelle page : macOS donnerait le focus clavier à son premier contrôle.
+        .onChange(of: navigation.selection) { _, _ in NSApp.keyWindow?.clearInitialFocus() }
     }
 }
 
@@ -297,5 +299,17 @@ struct SidebarFooter: View {
         case .ready, .online: return .plumeDone
         case .failed: return .red
         }
+    }
+}
+
+extension NSWindow {
+    /// Aucun contrôle ne garde le focus clavier à l'ouverture : sinon macOS le
+    /// donne au premier (puis au suivant) et l'entoure d'un cadre gris. La
+    /// fenêtre redevient le premier répondeur ; Tab ramène le focus si on le veut.
+    /// Refait juste après, car SwiftUI peut le redonner une fois la vue posée.
+    func clearInitialFocus() {
+        makeFirstResponder(nil)
+        DispatchQueue.main.async { [weak self] in self?.makeFirstResponder(nil) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in self?.makeFirstResponder(nil) }
     }
 }

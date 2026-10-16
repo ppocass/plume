@@ -16,6 +16,7 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
         window?.center()
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        window?.clearInitialFocus()
     }
 
     private func build() {
