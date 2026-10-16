@@ -8,6 +8,13 @@ Speech recognition runs on your Mac, so your voice doesn't leave it. It works in
 
 [Download Plume](https://github.com/ppocass/plume/releases/latest/download/Plume.dmg) | [Website](https://plume-vert.vercel.app) | [Version française](README.fr.md)
 
+<p align="center"><img src="docs/screenshots/dictation.png" width="640" alt="The Plume indicator while dictating"></p>
+
+<p align="center">
+  <img src="docs/screenshots/home.png" width="400" alt="Plume home window">
+  <img src="docs/screenshots/models.png" width="400" alt="Choosing a speech model">
+</p>
+
 ## Install
 
 1. Open `Plume.dmg` and drag Plume into Applications.

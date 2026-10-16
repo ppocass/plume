@@ -53,10 +53,7 @@ a:hover { text-decoration: underline; }
 main { max-width: 980px; margin: 0 auto; padding: 0 16px; }
 
 .hero { text-align: center; padding: 64px 0 56px; }
-.icon {
-  width: 168px; height: 168px;
-  filter: drop-shadow(0 18px 40px var(--glow));
-}
+.icon { width: 168px; height: 168px; }
 h1 {
   font-size: clamp(3rem, 9vw, 5.5rem); line-height: 1.02; letter-spacing: -0.035em;
   margin: 18px 0 10px; font-weight: 700;
@@ -78,6 +75,19 @@ h1 {
 
 h2 { font-size: clamp(1.8rem, 5vw, 2.6rem); letter-spacing: -0.025em; line-height: 1.1; text-align: center; margin: 0 0 28px; }
 h3 { font-size: 1.25rem; letter-spacing: -0.01em; margin: 0 0 8px; }
+
+/* Captures : défilement continu, sans fin (la piste contient deux fois les mêmes images). */
+.gallery { margin: 0 calc(50% - 50vw); padding: 8px 0 24px; }
+.marquee {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+}
+.track { display: flex; width: max-content; animation: defile 70s linear infinite; }
+.marquee:hover .track { animation-play-state: paused; }
+.shot { margin: 0 28px 0 0; flex: none; }
+.shot img { display: block; height: 360px; width: auto; filter: drop-shadow(0 12px 28px rgba(20, 20, 50, 0.18)); }
+@keyframes defile { to { transform: translateX(-50%); } }
 
 .how { padding: 40px 0; }
 .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
@@ -114,10 +124,14 @@ footer { text-align: center; color: var(--muted); padding: 24px 16px 40px; borde
 
 @media (max-width: 760px) {
   .steps, .cards { grid-template-columns: 1fr; }
+  .shot img { height: 220px; }
+  .shot { margin-right: 18px; }
   .hero { padding: 40px 0 36px; }
   .icon { width: 128px; height: 128px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .wave i { animation: none; }
+  .track { animation: none; }
+  .marquee { overflow-x: auto; -webkit-mask-image: none; mask-image: none; }
   .button, .lang { transition: none; }
 }

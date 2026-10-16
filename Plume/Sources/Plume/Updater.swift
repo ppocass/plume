@@ -46,7 +46,7 @@ final class Updater: ObservableObject {
         autoCheck = UserDefaults.standard.object(forKey: "autoCheckUpdates") as? Bool ?? true
     }
 
-    var isSupported: Bool { Bundle.main.bundleIdentifier == Self.publicBundleID }
+    var isSupported: Bool { Bundle.main.bundleIdentifier == Self.publicBundleID || Setup.demo }
     nonisolated static var currentVersion: String { Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0" }
 
     /// « 1.10 » > « 1.9 » ; les parties manquantes valent 0.

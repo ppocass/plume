@@ -18,6 +18,10 @@ final class Permissions: ObservableObject {
     var allGood: Bool { microphone == .authorized && accessibility && hotkeyActive }
 
     func refresh() {
+        if Setup.demo {
+            microphone = .authorized; accessibility = true; hotkeyActive = true; launchAtLogin = true
+            return
+        }
         microphone = AVCaptureDevice.authorizationStatus(for: .audio)
         accessibility = AXIsProcessTrusted()
         hotkeyActive = AppDelegate.shared?.hotkey.isRunning ?? false

@@ -128,7 +128,7 @@ struct StatTile: View {
         VStack(alignment: .leading, spacing: 6) {
             Image(systemName: symbol)
                 .foregroundStyle(Color.plumeTheme)
-            Text(value.formatted())
+            Text(formatNumber(value))
                 .font(.system(size: 24, weight: .semibold, design: .rounded).monospacedDigit())
                 .contentTransition(.numericText())
             Text(label)

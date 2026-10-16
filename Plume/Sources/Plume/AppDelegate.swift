@@ -97,7 +97,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.onOpenWindow = { MainWindowController.shared.show() }
         hotkey.shortcut = Prefs.shared.shortcut
         hotkey.onTap = { DictationController.shared.handleTap() }
-        startHotkey()
+        if !Setup.demo { startHotkey() }
 
         // Les apps Electron n'exposent leurs champs de texte qu'à la demande.
         NSWorkspace.shared.notificationCenter.addObserver(
@@ -114,7 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let prefs = Prefs.shared
         prefs.appearance.apply()
-        if prefs.isFirstLaunch {
+        if prefs.isFirstLaunch && !Setup.demo {
             prefs.isFirstLaunch = false
             // Plume doit tourner pour que la touche marche : ouverture de
             // session activée d'office (désactivable dans les réglages).
@@ -124,13 +124,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Premier lancement : l'assistant. Ensuite, la fenêtre à l'ouverture,
         // sauf au démarrage du Mac si tout est en ordre.
+        // Captures d'écran : `PLUME_DEMO_SECTION=models|settings|…`, `PLUME_DEMO_STEP=<n° d'étape>`.
+        if Setup.demo, let raw = ProcessInfo.processInfo.environment["PLUME_DEMO_STEP"], let step = Int(raw) {
+            OnboardingWindowController.shared.show()
+            OnboardingWindowController.shared.model.step = step
+            return
+        }
+        if Setup.demo, let raw = ProcessInfo.processInfo.environment["PLUME_DEMO_SECTION"], let section = SidebarItem(rawValue: raw) {
+            MainWindowController.shared.show(section: section)
+            return
+        }
         let showedNews = VersionTracker.handleLaunch()
         if !prefs.onboardingDone {
             OnboardingWindowController.shared.show()
         } else if !showedNews && (!launchedAsLoginItem || !Permissions.shared.allGood) {
             MainWindowController.shared.show()
         }
-        Updater.shared.checkAtLaunchIfNeeded()
+        if !Setup.demo { Updater.shared.checkAtLaunchIfNeeded() }
     }
 
     /// Le tap clavier exige l'Accessibilité : on réessaie toutes les 2 s tant

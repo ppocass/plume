@@ -17,6 +17,22 @@ enum AppLanguage: String, CaseIterable, Identifiable {
     }
 }
 
+/// Un nombre dans la langue de l'app (« 1 225 » / « 1,225 »), pas celle du Mac.
+func formatNumber(_ n: Int) -> String {
+    n.formatted(.number.locale(AppLanguage.current.locale))
+}
+
+/// Une taille de fichier dans la langue de l'app : « 632,3 Mo » / « 632.3 MB ».
+func formatBytes(_ bytes: Int64) -> String {
+    let fr = AppLanguage.current == .fr
+    let units = fr ? ["octets", "Ko", "Mo", "Go"] : ["bytes", "KB", "MB", "GB"]
+    var value = Double(bytes)
+    var unit = 0
+    while value >= 1000 && unit < units.count - 1 { value /= 1000; unit += 1 }
+    let digits = unit >= 2 ? 1 : 0
+    return value.formatted(.number.precision(.fractionLength(0...digits)).locale(AppLanguage.current.locale)) + " " + units[unit]
+}
+
 /// Le texte de l'interface dans la langue choisie : `L("Annuler", "Cancel")`.
 func L(_ fr: String, _ en: String) -> String { AppLanguage.current == .en ? en : fr }
 

@@ -44,22 +44,28 @@ final class StatusItemController: NSObject, NSMenuDelegate {
                                 action: #selector(toggleDictation), keyEquivalent: "")
         }
         toggle.target = self
+        toggle.image = NSImage(systemSymbolName: dictation.isRecordingNow ? "stop.circle" : "mic", accessibilityDescription: nil)
         menu.addItem(toggle)
 
         let copy = NSMenuItem(title: L("Copier la dernière dictée", "Copy Last Dictation"), action: #selector(copyLatest), keyEquivalent: "")
         copy.target = self
         copy.isEnabled = HistoryStore.shared.latest != nil
+        copy.image = NSImage(systemSymbolName: "doc.on.doc", accessibilityDescription: nil)
         menu.addItem(copy)
 
         menu.addItem(.separator())
-        for (title, selector) in [(L("Historique…", "History…"), #selector(openHistory)),
-                                  (L("Réglages…", "Settings…"), #selector(openSettings))] {
+        // Chaque entrée a son icône : macOS en met d'office à certaines (Réglages,
+        // Quitter), et les autres paraîtraient décalées.
+        for (title, selector, symbol) in [(L("Historique…", "History…"), #selector(openHistory), "clock.arrow.circlepath"),
+                                          (L("Réglages…", "Settings…"), #selector(openSettings), "gearshape")] {
             let entry = NSMenuItem(title: title, action: selector, keyEquivalent: "")
             entry.target = self
+            entry.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
             menu.addItem(entry)
         }
         menu.addItem(.separator())
         let quit = NSMenuItem(title: L("Quitter Plume", "Quit Plume"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
+        quit.image = NSImage(systemSymbolName: "xmark.rectangle", accessibilityDescription: nil)
         menu.addItem(quit)
     }
 

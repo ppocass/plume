@@ -8,6 +8,13 @@ La reconnaissance se fait sur votre Mac, votre voix n'en sort pas. Ça marche da
 
 [Télécharger Plume](https://github.com/ppocass/plume/releases/latest/download/Plume.dmg) | [Site](https://plume-vert.vercel.app) | [English](README.md)
 
+<p align="center"><img src="docs/screenshots/dictation.png" width="640" alt="La pastille de Plume pendant une dictée"></p>
+
+<p align="center">
+  <img src="docs/screenshots/home.png" width="400" alt="Accueil de Plume">
+  <img src="docs/screenshots/models.png" width="400" alt="Choix du modèle de voix">
+</p>
+
 ## Installation
 
 1. Ouvrez `Plume.dmg` et glissez Plume dans Applications.

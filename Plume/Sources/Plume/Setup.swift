@@ -70,6 +70,11 @@ enum Setup {
     static let home = FileManager.default.homeDirectoryForCurrentUser
     private static let fm = FileManager.default
 
+    /// `PLUME_DEMO=1` : pour les captures d'écran — pas de raccourci, pas
+    /// d'ouverture de session ni de mise à jour, autorisations affichées comme
+    /// accordées. À lancer avec `PLUME_DATA_DIR` vers des données de démo.
+    static let demo = ProcessInfo.processInfo.environment["PLUME_DEMO"] == "1"
+
     /// `PLUME_PORTABLE=1` : se comporter comme sur un Mac neuf (tests, captures).
     static let simulatePortable = ProcessInfo.processInfo.environment["PLUME_PORTABLE"] == "1"
 
