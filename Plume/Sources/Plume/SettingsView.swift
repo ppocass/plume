@@ -7,6 +7,7 @@ struct SettingsView: View {
     @EnvironmentObject var engine: EngineStatus
     @EnvironmentObject var models: ModelStore
     @EnvironmentObject var navigation: Navigation
+    @ObservedObject private var updater = Updater.shared
 
     var body: some View {
         Form {
@@ -101,6 +102,20 @@ struct SettingsView: View {
             }
 
             Section {
+                LabeledContent(L("Version", "Version"), value: Updater.currentVersion)
+                if updater.isSupported {
+                    Toggle(L("Rechercher automatiquement", "Check automatically"), isOn: $updater.autoCheck)
+                    LabeledContent(L("Mise à jour", "Update")) { UpdateStatus(updater: updater) }
+                }
+            } header: {
+                Text(L("Mises à jour", "Updates"))
+            } footer: {
+                Text(updater.isSupported
+                     ? L("Vos réglages, votre historique et vos modèles sont conservés.", "Your settings, history and models are kept.")
+                     : L("Version compilée sur ce Mac : elle se met à jour depuis ses sources.", "Built on this Mac: update it from source."))
+            }
+
+            Section {
                 Button(L("Revoir la configuration…", "Run Setup Again…")) {
                     OnboardingWindowController.shared.show()
                 }
@@ -132,6 +147,12 @@ struct PolishServiceRows: View {
         }
         if !prefs.polishService.usesKeyFile {
             APIKeyRow(account: prefs.polishService.keyAccount)
+        }
+        if !compact {
+            Picker(L("Consigne", "Instructions"), selection: $prefs.polishPrompt) {
+                ForEach(PromptLanguage.allCases) { Text($0.label).tag($0) }
+            }
+            .focusable(false)
         }
         ConnectionTestRow { await Polisher.test() }
         if let page = prefs.polishService.keyPage {
@@ -366,5 +387,38 @@ struct APIKeyRow: View {
         KeychainStore.write(account, key)
         draft = ""
         saved = true
+    }
+}
+
+/// État de la mise à jour, et le bouton qui va avec.
+struct UpdateStatus: View {
+    @ObservedObject var updater: Updater
+
+    var body: some View {
+        HStack(spacing: 8) {
+            switch updater.state {
+            case .checking:
+                ProgressView().controlSize(.small)
+                Text(L("Recherche…", "Checking…")).foregroundStyle(.secondary)
+            case .upToDate:
+                Text(L("Plume est à jour", "Plume is up to date")).foregroundStyle(.secondary)
+                checkButton
+            case .available(let v):
+                Text(L("Version \(v) disponible", "Version \(v) available")).foregroundStyle(Color.plumeTheme)
+                Button(L("Mettre à jour", "Update")) { Task { await updater.install() } }
+            case .downloading, .installing:
+                ProgressView().controlSize(.small)
+                Text(L("Installation…", "Installing…")).foregroundStyle(.secondary)
+            case .failed(let why):
+                Text(why).foregroundStyle(.orange).lineLimit(2)
+                checkButton
+            case .idle:
+                checkButton
+            }
+        }
+    }
+
+    private var checkButton: some View {
+        Button(L("Rechercher", "Check Now")) { Task { await updater.check(userInitiated: true) } }
     }
 }

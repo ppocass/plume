@@ -17,6 +17,18 @@ enum DictationLanguage: String, CaseIterable, Identifiable {
         case .pt: return L("Portugais", "Portuguese")
         }
     }
+    /// Nom de la langue pour la consigne anglaise du nettoyage.
+    var promptNameEN: String {
+        switch self {
+        case .auto: return "in its original language (often English or French, sometimes another one). Keep that language, never translate"
+        case .fr: return "in French"
+        case .en: return "in English"
+        case .es: return "in Spanish"
+        case .de: return "in German"
+        case .it: return "in Italian"
+        case .pt: return "in Portuguese"
+        }
+    }
     /// Nom de la langue pour la consigne du lissage.
     var promptName: String {
         switch self {
@@ -77,6 +89,31 @@ enum PillTint: String, CaseIterable, Identifiable {
     /// la pastille et de la fenêtre lisent la teinte au moment de se dessiner.
     static func stored(_ key: String, default fallback: PillTint) -> PillTint {
         PillTint(rawValue: UserDefaults.standard.string(forKey: key) ?? "") ?? fallback
+    }
+}
+
+/// Langue de la consigne envoyée au modèle de nettoyage (pas celle du texte).
+enum PromptLanguage: String, CaseIterable, Identifiable {
+    case auto, fr, en
+    var id: String { rawValue }
+    var label: String {
+        switch self {
+        case .auto: return L("Automatique", "Automatic")
+        case .fr: return "Français"
+        case .en: return "English"
+        }
+    }
+
+    /// Automatique : français si l'on dicte en français, anglais pour les
+    /// autres langues ; en détection automatique, la langue de l'interface.
+    static func resolved(for language: DictationLanguage) -> PromptLanguage {
+        let stored = PromptLanguage(rawValue: UserDefaults.standard.string(forKey: "polishPrompt") ?? "") ?? .auto
+        guard stored == .auto else { return stored }
+        switch language {
+        case .fr: return .fr
+        case .auto: return AppLanguage.current == .fr ? .fr : .en
+        default: return .en
+        }
     }
 }
 
@@ -143,6 +180,10 @@ final class Prefs: ObservableObject {
     @Published var sttModel: String {
         didSet { defaults.set(sttModel, forKey: "sttModel_\(sttService.rawValue)") }
     }
+    /// Langue de la consigne du nettoyage.
+    @Published var polishPrompt: PromptLanguage {
+        didSet { defaults.set(polishPrompt.rawValue, forKey: "polishPrompt") }
+    }
     /// Icône dans la barre des menus (désactivée par défaut).
     @Published var showInMenuBar: Bool {
         didSet {
@@ -190,6 +231,11 @@ final class Prefs: ObservableObject {
         sttModel = defaults.string(forKey: "sttModel_\(stt.rawValue)") ?? ""
         showInMenuBar = defaults.bool(forKey: "showInMenuBar")
         engineIdle = Prefs.idleSeconds
+        // Installée avant la consigne anglaise : on garde la consigne française, déjà éprouvée.
+        if defaults.string(forKey: "polishPrompt") == nil && defaults.bool(forKey: "onboardingDone") {
+            defaults.set(PromptLanguage.fr.rawValue, forKey: "polishPrompt")
+        }
+        polishPrompt = PromptLanguage(rawValue: defaults.string(forKey: "polishPrompt") ?? "") ?? .auto
         listenTint = PillTint.stored("listenTint", default: .cyan)
         thinkTint = PillTint.stored("thinkTint", default: .amber)
     }

@@ -38,6 +38,10 @@ Chaque modèle vient de Hugging Face, à une révision figée, et son empreinte 
 
 Plume peut corriger la ponctuation et retirer les « euh » avec un modèle de langage. Il faut votre propre clé API. Une clé gratuite [Groq](https://console.groq.com/keys) suffit : collez-la dans Réglages > Nettoyage. Seul le texte est envoyé, jamais la voix, et seulement si le nettoyage est activé. Sans clé, vous avez le texte brut.
 
+## Mises à jour
+
+Plume regarde sur GitHub s'il y a une nouvelle version, une fois par jour (désactivable dans Réglages > Mises à jour). Un clic l'installe à la place de l'ancienne. Vos réglages, votre historique, votre vocabulaire, vos modèles et vos clés API sont conservés, tout comme les autorisations Micro et Accessibilité. Les grosses versions montrent un court écran « Nouveautés ».
+
 ## Vie privée
 
 - Votre voix est traitée sur votre Mac (sauf si vous choisissez le modèle En ligne).

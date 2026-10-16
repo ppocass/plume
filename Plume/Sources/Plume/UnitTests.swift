@@ -22,6 +22,7 @@ enum UnitTests {
         recommendations()
         shortcuts()
         filter()
+        updates()
         print("\(passed) vérifications réussies, \(failures) échec(s)")
         return Int32(failures)
     }
@@ -144,6 +145,21 @@ enum UnitTests {
         let combo = Shortcut(kind: .combo, keyCode: 13, modifiers: CGEventFlags([.maskControl, .maskShift]).rawValue, display: "⌃⇧W")
         check(combo.matches(keyCode: 13, flags: [.maskControl, .maskShift]), "⌃⇧W reconnu")
         check(!combo.matches(keyCode: 13, flags: [.maskControl, .maskShift, .maskCommand]), "⌃⇧⌘W refusé")
+    }
+
+    static func updates() {
+        check(Updater.isNewer("1.10", than: "1.9"), "1.10 > 1.9")
+        check(Updater.isNewer("1.3", than: "1.2.2"), "1.3 > 1.2.2")
+        check(!Updater.isNewer("1.2", than: "1.2.0"), "1.2 = 1.2.0")
+        check(!Updater.isNewer("1.2.2", than: "1.3"), "1.2.2 < 1.3")
+        let json = #"{"tag_name":"v1.3","body":"Fix.\n\nSHA-256 of Plume.dmg: `f28fd2cb01e87aa4a83c9d4c625e4f964abebe55acd4a99612e3bd251d8619de`\n","assets":[{"name":"Plume-1.3.dmg","browser_download_url":"https://github.com/a/b/x.dmg"},{"name":"Plume.dmg","browser_download_url":"https://github.com/ppocass/plume/releases/download/v1.3/Plume.dmg"}]}"#
+        let r = try? Updater.parse(Data(json.utf8))
+        check(r?.version == "1.3" && r?.dmg.lastPathComponent == "Plume.dmg", "release lue (version, fichier)")
+        check(r?.sha256 == "f28fd2cb01e87aa4a83c9d4c625e4f964abebe55acd4a99612e3bd251d8619de", "empreinte lue dans les notes")
+        check(ReleaseNotes.pages(from: "1.2.2", to: "1.3").count == 4, "nouveautés 1.2.2 → 1.3")
+        check(ReleaseNotes.pages(from: "1.3", to: "1.3.1").isEmpty, "pas de nouveautés pour une petite version")
+        let fr = Polisher.promptEN(for: .en)
+        check(fr.contains("Reply with the cleaned text only") && fr.contains("in English"), "consigne anglaise")
     }
 
     static func filter() {

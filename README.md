@@ -38,6 +38,10 @@ Every model comes from Hugging Face at a fixed revision and is checked against i
 
 Plume can fix punctuation and remove filler words ("um", "uh") with a language model. You'll need your own API key for this. A free key from [Groq](https://console.groq.com/keys) is enough. Paste it in Settings > Cleanup. Only the text is sent, never your voice, and only if cleanup is on. Without a key, you get the raw transcription, which is already pretty good.
 
+## Updates
+
+Plume checks GitHub for a new version once a day (you can turn that off in Settings > Updates). One click installs it in place. Your settings, history, vocabulary, models and API keys are kept, and so are the microphone and accessibility permissions. Bigger releases show a short "What's new" screen.
+
 ## Privacy
 
 - Your voice is processed on your Mac (unless you choose the Online model).

@@ -263,7 +263,7 @@ struct OnboardingView: View {
 }
 
 /// Une page de l'assistant : icône, titre, sous-titre, puis son contenu.
-private struct StepPage<Content: View>: View {
+struct StepPage<Content: View>: View {
     enum Icon { case app, symbol(String) }
     let icon: Icon
     let title: String

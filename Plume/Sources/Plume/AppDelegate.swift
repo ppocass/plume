@@ -16,6 +16,10 @@ enum PlumeMain {
             Task { exit(await SelfTest.download(id)) }
             dispatchMain()
         }
+        if args.contains("--update-dry-run") {
+            Task { exit(await Updater.dryRun()) }
+            dispatchMain()
+        }
         if args.contains("--unit-tests") {
             MainActor.assumeIsolated { exit(UnitTests.run()) }
         }
@@ -115,11 +119,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Premier lancement : l'assistant. Ensuite, la fenêtre à l'ouverture,
         // sauf au démarrage du Mac si tout est en ordre.
+        let showedNews = VersionTracker.handleLaunch()
         if !prefs.onboardingDone {
             OnboardingWindowController.shared.show()
-        } else if !launchedAsLoginItem || !Permissions.shared.allGood {
+        } else if !showedNews && (!launchedAsLoginItem || !Permissions.shared.allGood) {
             MainWindowController.shared.show()
         }
+        Updater.shared.checkAtLaunchIfNeeded()
     }
 
     /// Le tap clavier exige l'Accessibilité : on réessaie toutes les 2 s tant
@@ -176,6 +182,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: Menus
 
     @objc private func openSettings() { MainWindowController.shared.show(section: .settings) }
+    @objc private func checkUpdates() {
+        MainWindowController.shared.show(section: .settings)
+        Task { await Updater.shared.check(userInitiated: true) }
+    }
     @objc private func openHistory() { MainWindowController.shared.show(section: .history) }
 
     /// Menu refait quand on change la langue de l'interface.
@@ -187,6 +197,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: L("À propos de Plume", "About Plume"), action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        if Updater.shared.isSupported {
+            let update = appMenu.addItem(withTitle: L("Rechercher les mises à jour…", "Check for Updates…"), action: #selector(checkUpdates), keyEquivalent: "")
+            update.target = self
+        }
         appMenu.addItem(.separator())
         let settings = appMenu.addItem(withTitle: L("Réglages…", "Settings…"), action: #selector(openSettings), keyEquivalent: ",")
         settings.target = self

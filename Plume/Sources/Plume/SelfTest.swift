@@ -12,7 +12,8 @@ enum SelfTest {
         print("service : \(PolishService.current.rawValue) · adresse : \(ep?.url.absoluteString ?? "aucune") · modèle : \(ep?.model ?? "-") · clé : \(ep?.key == nil ? "absente" : "présente")")
         for text in texts {
             let started = Date()
-            let out = await Polisher.polish(text, language: .fr)
+            let language = ProcessInfo.processInfo.environment["PLUME_LANGUAGE"].flatMap(DictationLanguage.init(rawValue:)) ?? .fr
+            let out = await Polisher.polish(text, language: language)
             print(String(format: "— %@\n  → %@ (%.2f s)", text, out ?? "[indisponible]", Date().timeIntervalSince(started)))
         }
         return 0
