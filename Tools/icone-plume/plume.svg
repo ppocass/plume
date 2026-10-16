@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.35" y2="1"><stop offset="0" stop-color="#7C8CFF"/><stop offset="1" stop-color="#4338CA"/></linearGradient>
+    <linearGradient id="gauche" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#E6E8FF"/></linearGradient>
+    <linearGradient id="droite" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#EDEFFF"/><stop offset="1" stop-color="#C5CAF5"/></linearGradient>
+    <filter id="ombre" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="20"/></filter>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <g transform="rotate(36 512 512)">
+    <g transform="translate(16 28)" opacity="0.32" filter="url(#ombre)" fill="#1E1A6B">
+      <path d="M540 120 C 470 190 430 290 424 400 C 418 520 446 620 512 700 C 590 620 618 520 614 410 C 610 300 585 200 540 120 Z"/>
+    </g>
+    <!-- vexille gauche, échancrures -->
+    <path d="M540 120 C 470 190 432 280 425 380 L 470 384 L 423 414 C 420 470 426 520 440 562 L 486 556 L 448 590 C 462 630 482 668 512 700 C 520 520 530 320 540 120 Z" fill="url(#gauche)"/>
+    <!-- vexille droit -->
+    <path d="M540 120 C 585 200 612 300 615 410 L 572 430 L 614 446 C 612 540 588 620 512 700 C 520 520 530 320 540 120 Z" fill="url(#droite)"/>
+    <!-- rachis + tuyau -->
+    <path d="M538 170 C 528 400 518 640 500 900" fill="none" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round"/>
+    <path d="M538 170 C 528 400 518 640 512 700" fill="none" stroke="#AEB4EE" stroke-width="5" stroke-linecap="round"/>
+  </g>
+</svg>

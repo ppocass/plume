@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plume, voice dictation for Mac</title>
+  <meta name="description" content="Press a key, talk, and the text appears where your cursor is. Free, and it runs on your Mac.">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#F7F7FB" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0E0E14" media="(prefers-color-scheme: dark)">
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Plume, voice dictation for Mac">
+  <meta property="og:description" content="Press a key, talk, and the text appears where your cursor is. Free, and it runs on your Mac.">
+  <meta property="og:image" content="https://plume-vert.vercel.app/og.png">
+  <meta property="og:url" content="https://plume-vert.vercel.app/">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/main.js" defer></script>
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="/"><img src="/favicon.png" alt="" width="24" height="24"> Plume</a>
+    <button class="lang" id="lang" type="button" aria-label="Changer de langue / Change language">FR</button>
+  </header>
+
+  <main>
+    <section class="hero">
+      <img class="icon" src="/icon.png" alt="Plume" width="168" height="168">
+      <h1>Plume</h1>
+      <p class="lead" data-fr="Appuyez sur une touche, parlez. Le texte s'écrit là où est votre curseur." data-en="Press a key and talk. The text appears where your cursor is.">Press a key and talk. The text appears where your cursor is.</p>
+      <div class="actions">
+        <a class="button primary" id="download" href="https://github.com/ppocass/plume/releases/latest/download/Plume.dmg"
+           data-fr="Télécharger pour Mac" data-en="Download for Mac">Download for Mac</a>
+        <a class="button" href="https://github.com/ppocass/plume">GitHub</a>
+      </div>
+      <p class="fine" data-fr="Gratuit · Mac Apple Silicon · macOS 14 ou plus récent" data-en="Free · Apple Silicon Mac · macOS 14 or later">Free · Apple Silicon Mac · macOS 14 or later</p>
+    </section>
+
+    <section class="how">
+      <h2 data-fr="Trois gestes" data-en="Three moves">Three moves</h2>
+      <div class="steps">
+        <div class="step"><kbd>fn</kbd><p data-fr="Appuyez une fois sur votre touche de raccourci (fn par défaut, au choix)." data-en="Press your shortcut key once (fn by default, any key you like).">Press your shortcut key once (fn by default, any key you like).</p></div>
+        <div class="step"><span class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span><p data-fr="Parlez, dans n'importe quelle app." data-en="Talk, in any app.">Talk, in any app.</p></div>
+        <div class="step"><kbd>fn</kbd><p data-fr="Appuyez de nouveau : le texte s'écrit. Deux fois vite pour annuler." data-en="Press it again and the text is typed. Twice quickly to cancel.">Press it again and the text is typed. Twice quickly to cancel.</p></div>
+      </div>
+    </section>
+
+    <section class="cards">
+      <article class="card">
+        <h3 data-fr="Privé" data-en="Private">Private</h3>
+        <p data-fr="La voix est reconnue sur votre Mac, elle n'en sort pas. Pas de compte, pas de statistiques." data-en="Your voice is recognized on your Mac and stays there. No account, no analytics.">Your voice is recognized on your Mac and stays there. No account, no analytics.</p>
+      </article>
+      <article class="card">
+        <h3 data-fr="Gratuit" data-en="Free">Free</h3>
+        <p data-fr="Plume est gratuite et open source. Le nettoyage du texte est facultatif, avec votre propre clé (une clé Groq gratuite suffit)." data-en="Plume is free and open source. Text cleanup is optional and uses your own key (a free Groq key is enough).">Plume is free and open source. Text cleanup is optional and uses your own key (a free Groq key is enough).</p>
+      </article>
+      <article class="card">
+        <h3 data-fr="Modèles" data-en="Models">Models</h3>
+        <p data-fr="Parakeet Ultra par défaut : 25 langues, très rapide, même avec 8 Go. Un Mac plus puissant peut prendre Whisper Large v3. L'assistant choisit pour vous." data-en="Parakeet Ultra by default: 25 languages, very fast, even with 8 GB. A more powerful Mac can use Whisper Large v3. The setup picks for you.">Parakeet Ultra by default: 25 languages, very fast, even with 8 GB. A more powerful Mac can use Whisper Large v3. The setup picks for you.</p>
+      </article>
+    </section>
+
+    <section class="install">
+      <h2 data-fr="Installation" data-en="Install">Install</h2>
+      <ol>
+        <li data-fr="Ouvrez Plume.dmg et glissez Plume dans Applications." data-en="Open Plume.dmg and drag Plume into Applications.">Open Plume.dmg and drag Plume into Applications.</li>
+        <li data-fr="Ouvrez Plume. macOS la bloque la première fois : allez dans Réglages Système, Confidentialité et sécurité, et cliquez sur « Ouvrir quand même »." data-en="Open Plume. macOS blocks it the first time: go to System Settings, Privacy &amp; Security, and click “Open Anyway”.">Open Plume. macOS blocks it the first time: go to System Settings, Privacy &amp; Security, and click “Open Anyway”.</li>
+        <li data-fr="Autorisez le micro et l'accessibilité. L'assistant vous guide et télécharge le modèle de voix." data-en="Allow the microphone and accessibility. The setup guides you and downloads the voice model.">Allow the microphone and accessibility. The setup guides you and downloads the voice model.</li>
+      </ol>
+      <p class="fine" data-fr="Pourquoi ce blocage ? Plume n'est pas signée avec un compte développeur Apple payant. Le code est public sur GitHub." data-en="Why the warning? Plume isn't signed with a paid Apple developer account. The code is public on GitHub.">Why the warning? Plume isn't signed with a paid Apple developer account. The code is public on GitHub.</p>
+    </section>
+  </main>
+
+  <footer>
+    <p><a href="https://github.com/ppocass/plume">GitHub</a> · <a href="https://github.com/ppocass/plume/blob/main/LICENSE" data-fr="Licence MIT" data-en="MIT license">MIT license</a></p>
+    <p data-fr="Ce site ne dépose aucun cookie et ne collecte rien." data-en="This site sets no cookies and collects nothing.">This site sets no cookies and collects nothing.</p>
+  </footer>
+</body>
+</html>
