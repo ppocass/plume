@@ -76,18 +76,32 @@ h1 {
 h2 { font-size: clamp(1.8rem, 5vw, 2.6rem); letter-spacing: -0.025em; line-height: 1.1; text-align: center; margin: 0 0 28px; }
 h3 { font-size: 1.25rem; letter-spacing: -0.01em; margin: 0 0 8px; }
 
-/* Captures : défilement continu, sans fin (la piste contient deux fois les mêmes images). */
+/* Captures : défilement continu et sans fin (piste doublée, menée par main.js),
+   qu'on peut aussi faire défiler à la main ; un clic agrandit une image. */
 .gallery { margin: 0 calc(50% - 50vw); padding: 8px 0 24px; }
 .marquee {
-  overflow: hidden;
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
-  mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+  overflow-x: auto; overflow-y: hidden;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  cursor: grab; outline: none;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
 }
-.track { display: flex; width: max-content; animation: defile 70s linear infinite; }
-.marquee:hover .track { animation-play-state: paused; }
-.shot { margin: 0 28px 0 0; flex: none; }
-.shot img { display: block; height: 360px; width: auto; filter: drop-shadow(0 12px 28px rgba(20, 20, 50, 0.18)); }
-@keyframes defile { to { transform: translateX(-50%); } }
+.marquee::-webkit-scrollbar { display: none; }
+.marquee.dragging { cursor: grabbing; }
+.track { display: flex; align-items: center; width: max-content; padding: 24px 0; }
+.shot { margin: 0 32px 0 0; flex: none; }
+.shot img { display: block; width: auto; cursor: zoom-in; user-select: none; -webkit-user-drag: none; }
+.shot.window img { height: 500px; }
+.shot.small img { height: 340px; filter: drop-shadow(0 16px 30px rgba(20, 20, 50, 0.22)); }
+
+/* Image agrandie : elle part de sa place dans le carrousel et y revient. */
+.lightbox {
+  position: fixed; inset: 0; z-index: 50; cursor: zoom-out;
+  background: rgba(8, 8, 14, 0.55);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+}
+.lightbox img { position: fixed; transform-origin: 0 0; cursor: zoom-out; will-change: transform; }
 
 .how { padding: 40px 0; }
 .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
@@ -124,14 +138,14 @@ footer { text-align: center; color: var(--muted); padding: 24px 16px 40px; borde
 
 @media (max-width: 760px) {
   .steps, .cards { grid-template-columns: 1fr; }
-  .shot img { height: 220px; }
+  .shot.window img { height: 300px; }
+  .shot.small img { height: 210px; }
   .shot { margin-right: 18px; }
   .hero { padding: 40px 0 36px; }
   .icon { width: 128px; height: 128px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .wave i { animation: none; }
-  .track { animation: none; }
-  .marquee { overflow-x: auto; -webkit-mask-image: none; mask-image: none; }
+  .marquee { -webkit-mask-image: none; mask-image: none; }
   .button, .lang { transition: none; }
 }
