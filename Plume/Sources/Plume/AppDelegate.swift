@@ -26,6 +26,16 @@ enum PlumeMain {
             dispatchMain()
         }
         if args.contains("--unit-tests") {
+            // 🔴 **Avant tout le reste.** `HistoryStore.shared` est un global
+            // `@MainActor` : le simple fait de démarrer l'application le
+            // construit, et il charge — puis RÉÉCRIT, ramené à 200 — le vrai
+            // historique de Pierre. Le test « historique illisible » allait
+            // jusqu'à mettre son fichier de côté. Un lancement de tests ne doit
+            // jamais toucher aux données de quelqu'un : on les envoie dans un
+            // dossier temporaire **avant** que quoi que ce soit les lise.
+            let scratch = FileManager.default.temporaryDirectory
+                .appendingPathComponent("plume-tests-\(UUID().uuidString)", isDirectory: true)
+            setenv("PLUME_DATA_DIR", scratch.path, 1)
             MainActor.assumeIsolated { exit(UnitTests.run()) }
         }
         if let i = args.firstIndex(of: "--selftest") {
