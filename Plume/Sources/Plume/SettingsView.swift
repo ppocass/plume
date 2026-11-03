@@ -66,7 +66,26 @@ struct SettingsView: View {
                        "Fixes punctuation and filler words. Only text is sent, with your own key."))
             }
 
-            Section(L("Pastille", "Indicator")) {
+            Section {
+                Picker("", selection: $prefs.pillStyle) {
+                    ForEach(PillStyle.allCases) { style in
+                        Text(style.label).tag(style)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .focusable(false)
+                Text(prefs.pillStyle.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text(L("Style de la pastille", "Indicator style"))
+            } footer: {
+                Text(L("La pastille ne prend aucune place dans la barre des menus : elle se dessine par-dessus. Les deux styles du haut glissent depuis le bord supérieur de l'écran.",
+                       "The indicator takes no room in the menu bar: it draws on top of it. Both top styles glide in from the top edge of the screen."))
+            }
+
+            Section(L("Couleurs", "Colors")) {
                 TintRow(title: L("Écoute", "Listening"), selection: $prefs.listenTint)
                 TintRow(title: L("Traitement", "Processing"), selection: $prefs.thinkTint)
                 LabeledContent(L("Aperçu", "Preview")) {
@@ -263,11 +282,17 @@ struct ShortcutRecorder: View {
     @Binding var shortcut: Shortcut
     /// Assistant : centré, sans rappeler la touche (affichée en grand au-dessus).
     var compact = false
+    /// Accepte aussi **deux modificateurs tenus ensemble** (⌘ gauche + ⌥ gauche)
+    /// : c'est le raccourci du 1337. Le recorder de la dictée normale garde ses
+    /// deux sortes, rien ne change pour lui.
+    var allowsPairs = false
     @State private var recording = false
     @State private var problem: String?
     @State private var monitor: Any?
     /// Touche modificatrice enfoncée seule pendant l'enregistrement.
     @State private var pendingModifier: Int64?
+    /// La ou les touches modificatrices tenues en ce moment (avec `allowsPairs`).
+    @State private var held: [Int64] = []
 
     var body: some View {
         VStack(alignment: compact ? .center : .trailing, spacing: 6) {
@@ -292,13 +317,22 @@ struct ShortcutRecorder: View {
                     ForEach(Shortcut.presets, id: \.keyCode) { preset in
                         Button(preset.label) { stop(); shortcut = preset }
                     }
+                    if allowsPairs {
+                        Divider()
+                        ForEach(Shortcut.pairPresets, id: \.display) { preset in
+                            Button(preset.label) { stop(); shortcut = preset }
+                        }
+                    }
                 } label: {
                     Text(L("Préréglages", "Presets"))
                 }
                 .fixedSize()
             }
             if recording {
-                Text(L("Touche seule ou combinaison (⌃⇧W) · Échap pour annuler", "Single key or combo (⌃⇧W) · Esc to cancel"))
+                Text(allowsPairs
+                     ? L("Touche seule, combinaison (⌃⇧W), ou deux touches tenues ensemble (⌘⌥) · Échap pour annuler",
+                         "Single key, combo (⌃⇧W), or two keys held together (⌘⌥) · Esc to cancel")
+                     : L("Touche seule ou combinaison (⌃⇧W) · Échap pour annuler", "Single key or combo (⌃⇧W) · Esc to cancel"))
                     .font(.caption).foregroundStyle(.secondary)
             } else if let problem {
                 Text(problem).font(.caption).foregroundStyle(.orange)
@@ -310,6 +344,7 @@ struct ShortcutRecorder: View {
     private func start() {
         problem = nil
         pendingModifier = nil
+        held = []
         recording = true
         AppDelegate.shared?.hotkey.paused = true
         monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .flagsChanged]) { event in
@@ -323,6 +358,7 @@ struct ShortcutRecorder: View {
         monitor = nil
         recording = false
         pendingModifier = nil
+        held = []
         AppDelegate.shared?.hotkey.paused = false
     }
 
@@ -330,6 +366,27 @@ struct ShortcutRecorder: View {
         let code = Int64(event.keyCode)
         if event.type == .flagsChanged {
             guard Shortcut.isModifierKey(code) else { return }
+            let down = Shortcut.downModifierKeys(CGEventFlags(rawValue: UInt64(event.cgEvent?.flags.rawValue ?? 0)))
+            if allowsPairs {
+                if down.count == 2, let pair = Shortcut.comboModifiers(down[0], down[1]) {
+                    held = down
+                    // Les deux tenues ensemble : c'est le raccourci, tout de suite.
+                    shortcut = pair
+                    stop()
+                    return
+                }
+                if down.isEmpty {
+                    // Tout est relâché : une touche seule était tenue jusqu'ici.
+                    if held.count == 1, let s = Shortcut.modifierKey(held[0]) {
+                        shortcut = s
+                        stop()
+                    }
+                    held = []
+                    return
+                }
+                held = down
+                return
+            }
             let held = event.modifierFlags.intersection([.command, .control, .option, .shift, .function])
             if let pending = pendingModifier {
                 // Relâchée seule → c'est le raccourci ; une 2ᵉ touche → on attend la combinaison.
@@ -346,6 +403,7 @@ struct ShortcutRecorder: View {
         }
         // keyDown
         pendingModifier = nil
+        held = []
         let mods = event.modifierFlags.intersection([.command, .control, .option, .shift])
         if code == 53 && mods.isEmpty { stop(); return }   // Échap seule : annuler
         let (combo, why) = Shortcut.combo(from: event)

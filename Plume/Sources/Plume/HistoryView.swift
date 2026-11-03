@@ -131,6 +131,9 @@ struct HistoryRow: View {
                     if !item.pasted && !item.failed {
                         Tag(text: L("Non inséré", "Not inserted"), color: .plumeTheme)
                     }
+                    if item.leet {
+                        Tag(text: "1337", color: .plumeTheme)
+                    }
                     if item.polished {
                         Tag(text: L("Nettoyé", "Cleaned"), color: .secondary)
                     }
@@ -162,7 +165,7 @@ struct HistoryRow: View {
         .contextMenu {
             if !item.failed {
                 Button(L("Copier", "Copy")) { copy(item.text) }
-                if item.polished && item.raw != item.text {
+                if (item.polished || item.leet) && item.raw != item.text {
                     Button(L("Copier le texte brut", "Copy Raw Text")) { copy(item.raw) }
                 }
                 Divider()

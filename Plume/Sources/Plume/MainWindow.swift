@@ -67,13 +67,14 @@ final class MainWindowController: NSObject, NSWindowDelegate {
 }
 
 enum SidebarItem: String, CaseIterable, Identifiable {
-    case home, history, vocabulary, models, settings
+    case home, history, vocabulary, leet, models, settings
     var id: String { rawValue }
     var title: String {
         switch self {
         case .home: return L("Accueil", "Home")
         case .history: return L("Historique", "History")
         case .vocabulary: return L("Vocabulaire", "Vocabulary")
+        case .leet: return "1337"
         case .models: return L("Modèles", "Models")
         case .settings: return L("Réglages", "Settings")
         }
@@ -83,6 +84,7 @@ enum SidebarItem: String, CaseIterable, Identifiable {
         case .home: return "waveform"
         case .history: return "clock.arrow.circlepath"
         case .vocabulary: return "character.book.closed"
+        case .leet: return "textformat.alt"
         case .models: return "cpu"
         case .settings: return "gearshape"
         }
@@ -109,6 +111,7 @@ struct MainView: View {
                 case .home: HomeView()
                 case .history: HistoryView()
                 case .vocabulary: VocabularyView()
+                case .leet: LeetView()
                 case .models: ModelsView()
                 case .settings: SettingsView()
                 }

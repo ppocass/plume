@@ -92,6 +92,54 @@ enum PillTint: String, CaseIterable, Identifiable {
     }
 }
 
+/// Le look de la pastille de dictée.
+///
+/// Pierre aimait le style d'origine (petit, minimaliste) mais pas son **fond
+/// noir opaque** : ça faisait une tache au-dessus de l'interface macOS. Les deux
+/// styles gardent donc la même simplicité et n'échangent que le matériau —
+/// du **verre dépoli** à la place de l'aplat.
+enum PillStyle: String, CaseIterable, Identifiable {
+    /// En bas de l'écran, au-dessus du Dock (l'emplacement historique).
+    case bottom
+    /// La même pastille, mais **en haut** : elle glisse depuis le bord
+    /// supérieur et s'arrête à la place de l'encoche.
+    case top
+    /// La carte **sortie de l'encoche** : sombre, à raccord plat avec le haut
+    /// de l'écran, coins arrondis seulement en bas.
+    case notch
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .bottom: return L("En bas", "Bottom")
+        case .top: return L("En haut", "Top")
+        case .notch: return L("Encoche", "Notch")
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .bottom:
+            return L("Au-dessus du Dock, comme depuis toujours.",
+                     "Above the Dock, as always.")
+        case .top:
+            return L("La même pastille, en haut : elle glisse depuis le bord de l'écran.",
+                     "The same pill, at the top: it glides in from the screen edge.")
+        case .notch:
+            return L("Une carte qui descend de l'encoche, à raccord plat avec le haut de l'écran.",
+                     "A card sliding out of the notch, flush with the top of the screen.")
+        }
+    }
+
+    /// Ce style descend du haut de l'écran (les deux du haut).
+    var hangsFromTop: Bool { self != .bottom }
+
+    static func stored() -> PillStyle {
+        PillStyle(rawValue: UserDefaults.standard.string(forKey: "pillStyle") ?? "") ?? .notch
+    }
+}
+
 /// Langue de la consigne envoyée au modèle de nettoyage (pas celle du texte).
 enum PromptLanguage: String, CaseIterable, Identifiable {
     case auto, fr, en
@@ -127,6 +175,21 @@ final class Prefs: ObservableObject {
     @Published var shortcut: Shortcut {
         didSet {
             if let data = try? JSONEncoder().encode(shortcut) { defaults.set(data, forKey: "shortcut") }
+        }
+    }
+    /// Dictée 1337 : le second geste maquille le texte en leet speak au lieu de
+    /// le rendre propre. Désactivée par défaut.
+    @Published var leetEnabled: Bool {
+        didSet { defaults.set(leetEnabled, forKey: "leetEnabled") }
+    }
+    /// Le niveau de maquillage.
+    @Published var leetLevel: Leet.Level {
+        didSet { defaults.set(leetLevel.rawValue, forKey: "leetLevel") }
+    }
+    /// Son raccourci : ⌘ gauche + ⌥ gauche par défaut.
+    @Published var leetShortcut: Shortcut {
+        didSet {
+            if let data = try? JSONEncoder().encode(leetShortcut) { defaults.set(data, forKey: "leetShortcut") }
         }
     }
     /// Langue de l'interface (le texte dicté n'est jamais traduit).
@@ -212,6 +275,14 @@ final class Prefs: ObservableObject {
     @Published var thinkTint: PillTint {
         didSet { defaults.set(thinkTint.rawValue, forKey: "thinkTint") }
     }
+    /// Le look de la pastille : en bas (historique) ou en haut, façon encoche.
+    @Published var pillStyle: PillStyle {
+        didSet {
+            defaults.set(pillStyle.rawValue, forKey: "pillStyle")
+            // Le panneau se replace tout seul au prochain affichage.
+            PillPanel.shared.styleChanged()
+        }
+    }
 
     /// Le moteur reste chargé ce temps après la dernière dictée, puis il est
     /// arrêté et rend sa mémoire (-1 = jamais). Lu aussi hors du fil principal
@@ -223,6 +294,10 @@ final class Prefs: ObservableObject {
 
     private init() {
         shortcut = Self.loadShortcut(defaults)
+        leetEnabled = defaults.bool(forKey: "leetEnabled")
+        leetLevel = Leet.Level(rawValue: defaults.string(forKey: "leetLevel") ?? "") ?? .medium
+        leetShortcut = (defaults.data(forKey: "leetShortcut").flatMap { try? JSONDecoder().decode(Shortcut.self, from: $0) })
+            ?? .leetDefault
         appLanguage = AppLanguage.current
         appearance = AppAppearance.current
         language = DictationLanguage(rawValue: defaults.string(forKey: "language") ?? "") ?? .auto
@@ -248,6 +323,7 @@ final class Prefs: ObservableObject {
         polishPrompt = PromptLanguage(rawValue: defaults.string(forKey: "polishPrompt") ?? "") ?? .auto
         listenTint = PillTint.stored("listenTint", default: .cyan)
         thinkTint = PillTint.stored("thinkTint", default: .amber)
+        pillStyle = PillStyle.stored()
     }
 
     /// Lit le raccourci ; reprend l'ancien réglage `trigger`.
@@ -264,9 +340,59 @@ final class Prefs: ObservableObject {
     }
 
     /// L'assistant de premier lancement a été parcouru jusqu'au bout.
+    ///
+    /// ⚠️ **Drapeau apprivoisé** (03/11/2026). Pierre voyait l'assistant
+    /// revenir à chaque redémarrage. Pour qu'il ne puisse plus jamais se
+    /// rallumer tout seul, on retient le fait « il a été terminé » dans
+    /// **deux endroits** :
+    ///
+    /// 1. la préférence historique `onboardingDone` (lue partout ailleurs) ;
+    /// 2. **`onboardingCompletedAt`**, une **date** qui ne s'efface pas.
+    ///
+    /// Si la première disparaît (domaine de préférences réinitialisé, app
+    /// relancée avec un autre identifiant, réglage écrasé par une restauration),
+    /// la seconde suffit : l'assistant reste fermé. La réciproque est vraie
+    /// aussi — si la date manque mais que le drapeau est là (installation
+    /// antérieure), on la repose aussitôt. **On ne se fie donc jamais à un
+    /// seul octet pour décider de rouvrir une fenêtre.**
+    ///
+    /// Le lire ne modifie rien ; c'est `markOnboardingDone()` qui pose les deux.
     var onboardingDone: Bool {
-        get { defaults.bool(forKey: "onboardingDone") }
-        set { defaults.set(newValue, forKey: "onboardingDone") }
+        get {
+            if defaults.bool(forKey: "onboardingDone") {
+                // Installation antérieure : on complète la date, sans bruit.
+                if defaults.object(forKey: "onboardingCompletedAt") == nil {
+                    defaults.set(Date(), forKey: "onboardingCompletedAt")
+                }
+                return true
+            }
+            // Le drapeau manque : la date, elle, est peut-être encore là.
+            if defaults.object(forKey: "onboardingCompletedAt") != nil {
+                defaults.set(true, forKey: "onboardingDone")
+                Log.info("assistant : drapeau réparé depuis la date de fin")
+                return true
+            }
+            return false
+        }
+        set {
+            if newValue {
+                markOnboardingDone()
+            } else {
+                // « Revoir la configuration… » : on rouvre volontairement, mais
+                // la date reste — elle dit qu'il *a* été fait une fois. Sinon,
+                // fermer l'assistant sans le refaire le rallumerait à chaque
+                // démarrage : exactement le bug qu'on vient de corriger.
+            }
+        }
+    }
+
+    /// L'assistant a été terminé pour de bon : les deux preuves sont posées.
+    func markOnboardingDone() {
+        defaults.set(true, forKey: "onboardingDone")
+        if defaults.object(forKey: "onboardingCompletedAt") == nil {
+            defaults.set(Date(), forKey: "onboardingCompletedAt")
+        }
+        defaults.synchronize()
     }
 
     var isFirstLaunch: Bool {

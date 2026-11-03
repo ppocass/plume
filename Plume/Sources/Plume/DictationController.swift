@@ -81,6 +81,9 @@ final class DictationController: ObservableObject {
     private var watchdog: Task<Void, Never>?
     private var isProcessing = false
     private var live: LiveTranscriber?
+    /// La dictée en cours est-elle la dictée 1337 ? Décidé au départ, gardé
+    /// jusqu'au traitement : c'est ce qui décide de maquiller le texte.
+    private var isLeetRun = false
 
     /// Une fenêtre (Réglages) demande à s'ouvrir.
     var onOpenWindow: (() -> Void)?
@@ -93,7 +96,17 @@ final class DictationController: ObservableObject {
 
     // MARK: Gestes
 
-    func handleTap() {
+    /// Le raccourci 1337 (⌘ gauche + ⌥ gauche) : même geste que la dictée, mais
+    /// le texte final est maquillé. Si la dictée 1337 n'est pas activée, on ne
+    /// fait rien (le couple reste simplement ⌘⌥ pour les autres apps).
+    func handleLeetTap() {
+        guard Prefs.shared.leetEnabled else { return }
+        handleTap(leet: true)
+    }
+
+    /// `leet` : le geste vient du raccourci 1337. Il ne compte qu'au **départ**
+    /// (une dictée 1337 se termine avec le geste normal).
+    func handleTap(leet: Bool = false) {
         if isProcessing {
             // Pendant le traitement, un appui ne fait rien (la dictée en cours
             // va être collée) — on ne veut pas en démarrer une autre par erreur.
@@ -131,7 +144,7 @@ final class DictationController: ObservableObject {
                 }
             }
         } else {
-            start()
+            start(leet: leet)
         }
     }
 
@@ -154,7 +167,8 @@ final class DictationController: ObservableObject {
 
     private var isRecording: Bool { recorder.isRunning || fakeRecording }
 
-    private func start() {
+    private func start(leet: Bool = false) {
+        isLeetRun = leet && Prefs.shared.leetEnabled
         if fakeAudio != nil {
             fakeRecording = true
             recordingStartedAt = Date()
@@ -169,7 +183,7 @@ final class DictationController: ObservableObject {
         case .notDetermined:
             AVCaptureDevice.requestAccess(for: .audio) { granted in
                 Task { @MainActor in
-                    if granted { self.start() } else { self.show(.message(L("Micro refusé", "Microphone denied"), isError: true), for: 2.5) }
+                    if granted { self.start(leet: self.isLeetRun) } else { self.show(.message(L("Micro refusé", "Microphone denied"), isError: true), for: 2.5) }
                 }
             }
             return
@@ -240,6 +254,8 @@ final class DictationController: ObservableObject {
         if Prefs.shared.soundsEnabled { NSSound(named: "Bottle")?.play() }
         let language = Prefs.shared.effectiveLanguage
         let polishOn = Prefs.shared.polishEnabled
+        let leet = isLeetRun
+        isLeetRun = false
         let live = self.live
         self.live = nil
         Log.info(String(format: "fin de dictée (%.1f s), traitement…", Double(samples.count) / AudioRecorder.sampleRate))
@@ -253,7 +269,7 @@ final class DictationController: ObservableObject {
             let t0 = Date()
             let done = await live?.finishLive()
             if live != nil { Log.info(String(format: "au fil de l'eau : terminé %.2f s après la fin", Date().timeIntervalSince(t0))) }
-            await self.process(samples: samples, language: language, polishOn: polishOn, existing: nil, live: done)
+            await self.process(samples: samples, language: language, polishOn: polishOn, existing: nil, live: done, leet: leet)
         }
     }
 
@@ -261,8 +277,10 @@ final class DictationController: ObservableObject {
 
     /// Transcrit, lisse, colle (ou garde), et range dans l'historique.
     /// `existing` : une dictée ratée qu'on réessaie depuis l'historique (pas de collage).
+    /// `leet` : maquiller le texte final en 1337. C'est le seul écart avec le
+    /// chemin normal : sans lui, tout se déroule exactement comme avant.
     func process(samples: [Float], language: DictationLanguage, polishOn: Bool, existing: Dictation?,
-                 live: LiveTranscriber.Result? = nil) async {
+                 live: LiveTranscriber.Result? = nil, leet: Bool = false) async {
         let seconds = Double(samples.count) / AudioRecorder.sampleRate
         let engine = SpeechEngine.shared
         let vocabulary = VocabularyStore.shared.snapshot
@@ -320,25 +338,38 @@ final class DictationController: ObservableObject {
             return
         }
 
+        // Le maquillage 1337 se fait **après** tout le reste (vocabulaire,
+        // commandes vocales, lissage) : c'est le texte final qu'on habille,
+        // jamais du français propre qu'on réécrirait ensuite.
+        var paste = final
+        var leetLevel: Leet.Level?
+        if leet {
+            let level = Prefs.shared.leetLevel
+            paste = Leet.transform(final, level: level)
+            leetLevel = level
+            Log.info("dictée 1337 (\(level.rawValue)) : \(final.count) → \(paste.count) caractères")
+        }
+
         // Le champ visé est celui où est le curseur MAINTENANT (on a pu
         // changer d'app pendant la dictée).
         let target = TextInserter.currentTarget()
         let shouldPaste = target.editable != false && target.bundleID != Bundle.main.bundleIdentifier
         Log.info("cible : \(target.appName ?? "?") rôle \(target.role ?? "?") éditable \(target.editable.map { String($0) } ?? "?") → \(shouldPaste ? "collage" : "historique")")
         if shouldPaste {
-            TextInserter.paste(target.needsLeadingSpace ? " " + final : final)
+            TextInserter.paste(target.needsLeadingSpace ? " " + paste : paste)
         }
         // Champ de mot de passe : collé, mais jamais gardé en clair dans l'historique.
         let secret = target.role == "AXSecureTextField"
-        HistoryStore.shared.add(Dictation(date: Date(), text: secret ? "••••••" : final, raw: secret ? "" : raw, polished: polished,
-                                          pasted: shouldPaste, appName: target.appName, audioSeconds: seconds))
+        HistoryStore.shared.add(Dictation(date: Date(), text: secret ? "••••••" : paste, raw: secret ? "" : raw, polished: polished,
+                                          pasted: shouldPaste, appName: target.appName, audioSeconds: seconds,
+                                          leet: leetLevel != nil))
         if shouldPaste {
             show(.pasted, for: 0.9)
         } else {
             // Pas de champ : on montre le texte et on le laisse à l'écran — le
             // clic le copie, le double appui le ferme (voir `pillClicked` /
             // `handleTap`).
-            showPersistent(.savedToHistory(final))
+            showPersistent(.savedToHistory(paste))
         }
     }
 

@@ -44,7 +44,8 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
     }
 
     private func finish() {
-        Prefs.shared.onboardingDone = true
+        // Les deux preuves d'un coup (préférence + date) : voir `Prefs`.
+        Prefs.shared.markOnboardingDone()
         window?.close()
         MainWindowController.shared.show()
     }

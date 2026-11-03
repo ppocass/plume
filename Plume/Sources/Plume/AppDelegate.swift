@@ -97,6 +97,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.onOpenWindow = { MainWindowController.shared.show() }
         hotkey.shortcut = Prefs.shared.shortcut
         hotkey.onTap = { DictationController.shared.handleTap() }
+        // Le second geste (1337) : écouté seulement quand il est activé.
+        hotkey.leetShortcut = Prefs.shared.leetEnabled ? Prefs.shared.leetShortcut : nil
+        hotkey.onLeetTap = { DictationController.shared.handleLeetTap() }
         if !Setup.demo { startHotkey() }
 
         // Les apps Electron n'exposent leurs champs de texte qu'à la demande.
