@@ -74,6 +74,18 @@ final class PillPanel: NSPanel {
         return NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
     }
 
+    /// La taille de la fenêtre pour une phase donnée.
+    ///
+    /// En style « encoche », la **carte est plus étroite** que la pastille
+    /// d'origine (300 au lieu de 320) : la maquette qui a plu à Pierre était
+    /// compacte, et une carte large ne « sort » pas crédiblement d'une encoche.
+    /// Le pop-up garde sa largeur (il doit pouvoir montrer une ligne de texte).
+    private func panelSize(for phase: PillPhase) -> NSSize {
+        if phase.showsPreview { return Self.previewSize }
+        if pillStyle == .notch { return NSSize(width: 300, height: 64) }
+        return Self.pillSize
+    }
+
     /// Le cadre cible d'une taille donnée, selon le style.
     ///
     /// - `bottom` : **bord bas fixe** au-dessus du Dock — la pastille grandit
@@ -109,7 +121,7 @@ final class PillPanel: NSPanel {
     /// affichage et Pierre croirait que le réglage n'a rien fait.
     func styleChanged() {
         guard isVisible else { return }
-        let target = DictationController.shared.phase.showsPreview ? Self.previewSize : Self.pillSize
+        let target = panelSize(for: DictationController.shared.phase)
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.28
             context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
@@ -119,7 +131,7 @@ final class PillPanel: NSPanel {
 
     func present() {
         // La fenêtre prend la taille de ce que montre la pastille à cet instant.
-        let target = DictationController.shared.phase.showsPreview ? Self.previewSize : Self.pillSize
+        let target = panelSize(for: DictationController.shared.phase)
         let goal = targetFrame(size: target)
 
         if !isVisible {
@@ -202,17 +214,42 @@ struct PillView: View {
         ZStack(alignment: hangsFromTop ? .top : .bottom) {
             Color.clear
             if controller.phase != .hidden {
-                content
-                    .transition(hangsFromTop
-                        ? .opacity
-                        : .scale(scale: 0.6, anchor: .bottom).combined(with: .opacity))
-                    .padding(hangsFromTop ? .top : .bottom, hangsFromTop ? topInset : 6)
+                Group {
+                    if style == .notch {
+                        // Une seule forme : coiffe + carte, dessinées ensemble.
+                        content
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .padding(.top, 30)      // la place de la coiffe
+                            .background(NotchCardBackground())
+                    } else {
+                        content
+                    }
+                }
+                .frame(width: style == .notch ? 300 : nil)
+                .transition(hangsFromTop
+                    ? .opacity
+                    : .scale(scale: 0.6, anchor: .bottom).combined(with: .opacity))
+                .padding(hangsFromTop ? .top : .bottom, hangsFromTop ? topInset : 6)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(.spring(response: 0.32, dampingFraction: 0.78), value: controller.phase)
     }
 
+    /// Le fond « encoche » : la silhouette de `NotchCardShape` en noir, avec le
+    /// même filet et la même ombre que le reste de l'app.
+    private struct NotchCardBackground: View {
+        var body: some View {
+            NotchCardShape()
+                .fill(Color(white: 0.055))
+                .overlay(NotchCardShape().stroke(Color.white.opacity(0.13), lineWidth: 0.75))
+                .shadow(color: .black.opacity(0.50), radius: 20, y: 9)
+        }
+    }
+
+    /// Ce que montre la pastille, selon l'instant de la dictée.
     @ViewBuilder
     private var content: some View {
         if case .savedToHistory(let text) = controller.phase {
@@ -240,9 +277,16 @@ struct PillView: View {
                     EmptyView()
                 }
             }
+            // ⚠️ L'ordre compte : `.frame` **avant** `.background`, sinon le
+            // fond reste à la taille du texte et la carte sort plus étroite
+            // que sa coiffe.
+            .frame(maxWidth: style == .notch ? .infinity : nil)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(pillBackground(capsule: true))
+            // En encoche, le fond est déjà dessiné par `NotchCardBackground`
+            // (une seule silhouette) : en remettre un ici produirait un contour
+            // intérieur visible, comme une boîte dans la boîte.
+            .background(style == .notch ? nil : pillBackground(capsule: true))
             .contentShape(Capsule())
             .onTapGesture { controller.pillClicked() }
             .help(tapHelp)
@@ -271,9 +315,11 @@ struct PillView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: style == .notch ? .infinity : nil, alignment: .leading)
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(pillBackground(capsule: false))
+        // Voir `content` : en encoche, la silhouette est déjà dessinée par le parent.
+        .background(style == .notch ? nil : pillBackground(capsule: false))
         .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .onTapGesture { controller.pillClicked() }
         .help(L("Copier le texte", "Copy text"))
@@ -323,11 +369,17 @@ struct PillView: View {
         let shape: AnyShape = pillShape(capsule: capsule)
         if style == .notch {
             // Pas d'arrondi en haut : le raccord avec l'encoche est plat.
+            //
+            // 🔴 **Pas de `.ultraThinMaterial` ici.** Testé le 03/11 : posé
+            // par-dessus un fond clair, le matériau rend **gris moyen** et la
+            // carte perd tout son effet d'encoche — elle ressemble à un bout
+            // de plastique. L'encoche du Mac est **noire** : on l'assume.
+            // Un noir très légèrement translucide garde un peu du fond, sans
+            // jamais virer au gris.
             shape
-                .fill(.ultraThinMaterial)
-                .overlay(shape.fill(Color.black.opacity(0.72)))
-                .overlay(shape.stroke(Color.white.opacity(0.16), lineWidth: 0.75))
-                .shadow(color: .black.opacity(0.45), radius: 18, y: 8)
+                .fill(Color(white: 0.055).opacity(0.97))
+                .overlay(shape.stroke(Color.white.opacity(0.13), lineWidth: 0.75))
+                .shadow(color: .black.opacity(0.50), radius: 20, y: 9)
         } else {
             shape
                 .fill(.ultraThinMaterial)
@@ -344,13 +396,15 @@ struct PillView: View {
     /// se fonde dans le bord de l'écran.
     private func pillShape(capsule: Bool) -> AnyShape {
         if style == .notch {
-            // Coins du haut droits : la carte se fond dans le bord de l'écran.
-            // Le bas garde l'arrondi de la forme d'origine (32 = demi-hauteur
-            // d'une pastille, 16 pour le pop-up large).
-            let bottom: CGFloat = capsule ? 32 : 16
+            // ⚠️ **Pas une capsule.** Une capsule a des **demi-cercles** aux
+            // bouts (rayon = moitié de la hauteur) : ça ne ressemble à rien de
+            // macOS. L'encoche d'un MacBook a des coins de **12-14 pt** tout au
+            // plus, et son bas arrondi suit la même famille. On prend donc un
+            // arrondi continu de 14 pt en bas, et **0 en haut** pour que la
+            // carte se fonde dans le bord de l'écran.
             return AnyShape(UnevenRoundedRectangle(
-                topLeadingRadius: 0, bottomLeadingRadius: bottom,
-                bottomTrailingRadius: bottom, topTrailingRadius: 0, style: .continuous))
+                topLeadingRadius: 0, bottomLeadingRadius: 14,
+                bottomTrailingRadius: 14, topTrailingRadius: 0, style: .continuous))
         }
         return capsule
             ? AnyShape(Capsule())
@@ -400,7 +454,12 @@ struct PillView: View {
         }
         let level = CGFloat(meter.levels[i])
         let shimmer = 0.5 + 0.5 * sin(t * 7 + Double(i) * 1.3)
-        return max(3, 3 + 15 * pow(level, 0.8) + CGFloat(shimmer) * 1.5)
+        // 🐛 Avant le correctif : sans micro ouvert (rendu hors écran, ou juste
+        // après le démarrage), toutes les barres tombaient à `max(3, …)` et la
+        // pastille montrait **treize points alignés** — laid, et Pierre l'aurait
+        // pris pour un bug d'affichage. Le frémissement seul donne maintenant une
+        // vague lisible qui respire, comme sur une vraie écoute au calme.
+        return max(3, 3 + 15 * pow(level, 0.8) + CGFloat(shimmer) * 4)
     }
 }
 
@@ -413,5 +472,44 @@ private struct PillLabelStyle: LabelStyle {
         }
         .font(.system(size: 12, weight: .medium))
         .fixedSize()
+    }
+}
+
+/// La silhouette complète du style « encoche » : **une seule forme**, la coiffe
+/// étroite en haut et la carte large en bas.
+///
+/// Pourquoi une seule forme et pas deux rectangles empilés : empilés, le filet
+/// clair du haut de la carte dessinait une **couture** visible entre les deux,
+/// et l'ensemble ne ressemblait plus à une encoche mais à deux blocs collés.
+/// Ici il n'y a qu'un contour, donc rien à raccorder.
+struct NotchCardShape: Shape {
+    /// Largeur de la coiffe (l'encoche du MacBook fait ~200 pt).
+    var capWidth: CGFloat = 200
+    /// Hauteur de la coiffe (la barre des menus fait 37 pt).
+    var capHeight: CGFloat = 32
+    /// Arrondi du bas de la carte — un arrondi macOS, pas un demi-cercle.
+    var corner: CGFloat = 14
+
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let capLeft = rect.midX - capWidth / 2
+        let capRight = rect.midX + capWidth / 2
+        let bottomY = rect.maxY
+        let cardTop = rect.minY + capHeight
+
+        p.move(to: CGPoint(x: capLeft, y: rect.minY))
+        p.addLine(to: CGPoint(x: capRight, y: rect.minY))
+        p.addLine(to: CGPoint(x: capRight, y: cardTop))
+        p.addLine(to: CGPoint(x: rect.maxX, y: cardTop))
+        p.addLine(to: CGPoint(x: rect.maxX, y: bottomY - corner))
+        p.addQuadCurve(to: CGPoint(x: rect.maxX - corner, y: bottomY),
+                       control: CGPoint(x: rect.maxX, y: bottomY))
+        p.addLine(to: CGPoint(x: rect.minX + corner, y: bottomY))
+        p.addQuadCurve(to: CGPoint(x: rect.minX, y: bottomY - corner),
+                       control: CGPoint(x: rect.minX, y: bottomY))
+        p.addLine(to: CGPoint(x: rect.minX, y: cardTop))
+        p.addLine(to: CGPoint(x: capLeft, y: cardTop))
+        p.closeSubpath()
+        return p
     }
 }

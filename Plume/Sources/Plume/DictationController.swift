@@ -88,6 +88,16 @@ final class DictationController: ObservableObject {
     /// Une fenêtre (Réglages) demande à s'ouvrir.
     var onOpenWindow: (() -> Void)?
 
+    /// **Vérification visuelle seulement** (`Plume --snapshot`).
+    ///
+    /// Permet de rendre la **vraie** `PillView` hors écran, au lieu d'en
+    /// recopier le dessin : une copie dérive tôt ou tard du vrai code, et on
+    /// montre alors à Pierre un rendu qui ne ressemble à rien de ce qu'il verra.
+    /// Ne fait rien d'autre : le panneau n'est pas affiché, le micro pas ouvert.
+    func setPhaseForSnapshot(_ phase: PillPhase) {
+        self.phase = phase
+    }
+
     private init() {
         recorder.onLevel = { [weak self] level in
             Task { @MainActor in self?.meter.push(level) }
