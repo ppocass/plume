@@ -58,6 +58,22 @@ enum UnitTests {
               "rouvert volontairement : la date est conservée")
     }
 
+    /// Le nettoyage de la graphie enregistrée : on veut un **mot**, pas une
+    /// phrase ponctuée. Les moteurs ajoutent souvent un point final et une
+    /// majuscule initiale (« Dipsik. ») — ça ne doit pas se retrouver dans la
+    /// liste des graphies.
+    static func pronounceCleanup() {
+        let r = PronounceRecorder.shared
+        check(r.cleanHeard("Dipsik.") == "Dipsik", "point final retiré")
+        check(r.cleanHeard("  jexilax  ") == "jexilax", "espaces retirés")
+        check(r.cleanHeard("Taïuscale, ") == "Taïuscale", "virgule retirée")
+        check(r.cleanHeard("« Gexilax »") == "Gexilax", "guillemets retirés")
+        check(r.cleanHeard("") == "", "vide reste vide")
+        check(r.cleanHeard("...") == "", "ponctuation seule → vide")
+        // Une graphie de deux mots reste une graphie de deux mots.
+        check(r.cleanHeard("taille scale.") == "taille scale", "deux mots conservés")
+    }
+
     private static func check(_ ok: Bool, _ what: String) {
         if ok { passed += 1 } else { failures += 1; print("❌ \(what)") }
     }
@@ -76,6 +92,7 @@ enum UnitTests {
         leet()
         leetShortcuts()
         onboardingFlag()
+        pronounceCleanup()
         print("\(passed) vérifications réussies, \(failures) échec(s)")
         return Int32(failures)
     }
