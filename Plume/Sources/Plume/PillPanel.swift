@@ -80,10 +80,23 @@ final class PillPanel: NSPanel {
     /// d'origine (300 au lieu de 320) : la maquette qui a plu à Pierre était
     /// compacte, et une carte large ne « sort » pas crédiblement d'une encoche.
     /// Le pop-up garde sa largeur (il doit pouvoir montrer une ligne de texte).
+    /// Marge horizontale laissée à l'ombre de la carte, de chaque côté.
+    ///
+    /// La fenêtre est **plus large que la carte** : sans cette marge, l'ombre
+    /// se fait couper par le bord de la fenêtre et dessine un rectangle à
+    /// angles droits (le défaut signalé par Pierre le 04/11).
+    static let shadowMargin: CGFloat = 26
+    /// Marge verticale : l'ombre descend sous la carte.
+    static let shadowMarginBottom: CGFloat = 26
+
     private func panelSize(for phase: PillPhase) -> NSSize {
-        if phase.showsPreview { return Self.previewSize }
-        if pillStyle == .notch { return NSSize(width: 300, height: 64) }
-        return Self.pillSize
+        // Largeurs : 276 pour l'encoche (un peu plus étroite, demande de Pierre),
+        // la taille d'origine pour les autres. Le pop-up garde de quoi lire.
+        let card: NSSize = phase.showsPreview
+            ? Self.previewSize
+            : (pillStyle == .notch ? NSSize(width: 276, height: 64) : Self.pillSize)
+        return NSSize(width: card.width + Self.shadowMargin * 2,
+                      height: card.height + Self.shadowMarginBottom)
     }
 
     /// Le cadre cible d'une taille donnée, selon le style.
@@ -158,28 +171,55 @@ final class PillPanel: NSPanel {
     /// glisse en 0,42 s : assez pour qu'on voie d'où elle vient, assez court
     /// pour ne pas faire attendre pendant une dictée.
     private func slideIn(to goal: NSRect) {
+        // ⚠️ **Un vrai glissement, pas un fondu.** Pierre l'a dit le 04/11 :
+        // « tu m'as fait une animation d'apparition, moi je voulais un truc qui
+        // glisse depuis le haut ». La carte part donc **entièrement hors de
+        // l'écran**, au-dessus du bord, et descend. Elle est **opaque dès le
+        // premier pixel** (alpha = 1) : c'est la position qui fait tout, et
+        // aucun fondu ne vient adoucir le mouvement.
         var start = goal
-        start.origin.y = goal.maxY - 8          // presque entièrement hors écran
+        start.origin.y = goal.maxY + 4        // juste au-dessus du bord supérieur
         setFrame(start, display: false)
-        alphaValue = 0
+        alphaValue = 1
         slidingIn = true
         orderFrontRegardless()
 
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.42
-            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.18, 1.28, 0.42, 1.0)
+            // 0,34 s : le temps de voir le mouvement sans faire attendre
+            // quelqu'un qui vient de parler. Décélération franche en fin de
+            // course (`easeOut`), comme un panneau qui se pose.
+            context.duration = 0.34
+            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.16, 0.84, 0.24, 1.0)
             animator().setFrame(goal, display: true)
-            animator().alphaValue = 1
         } completionHandler: { [weak self] in
             self?.slidingIn = false
         }
     }
 
+    /// La sortie : la carte **remonte** hors de l'écran, symétrique de l'entrée.
+    /// Avant, elle disparaissait par un simple retrait de la fenêtre — ce qui
+    /// donnait l'impression qu'elle s'évaporait.
+    func slideOut(completion: @escaping () -> Void = {}) {
+        guard isVisible else { completion(); return }
+        var out = frame
+        out.origin.y = frame.maxY + 4
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.22
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            animator().setFrame(out, display: true)
+        }, completionHandler: completion)
+    }
+
     func dismiss() {
-        // La vue joue sa propre transition de sortie ; on retire la fenêtre après.
+        // On laisse à la vue le temps de jouer sa transition, puis on retire.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
             guard let self, DictationController.shared.phase == .hidden else { return }
-            self.orderOut(nil)
+            if self.pillStyle.hangsFromTop {
+                // Du haut : la carte remonte hors de l'écran, comme elle est venue.
+                self.slideOut { self.orderOut(nil) }
+            } else {
+                self.orderOut(nil)
+            }
         }
     }
 }
@@ -226,11 +266,17 @@ struct PillView: View {
                         content
                     }
                 }
-                .frame(width: style == .notch ? 300 : nil)
+                .frame(width: style == .notch ? 276 : nil)
                 .transition(hangsFromTop
                     ? .opacity
                     : .scale(scale: 0.6, anchor: .bottom).combined(with: .opacity))
+                // Marge de chaque côté : l'ombre de la carte a besoin de place
+                // pour s'étaler. Sans elle, le bord de la fenêtre la **coupe
+                // net** — et on voit un rectangle sombre à angles droits autour
+                // de la carte, ce que Pierre a entouré en rouge.
+                .padding(.horizontal, 26)
                 .padding(hangsFromTop ? .top : .bottom, hangsFromTop ? topInset : 6)
+                .padding(.bottom, hangsFromTop ? 26 : 0)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

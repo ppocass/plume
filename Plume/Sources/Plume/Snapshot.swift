@@ -73,13 +73,13 @@ enum Snapshot {
 
                 // 1. La pastille d'écoute.
                 DictationController.shared.setPhaseForSnapshot(.recording)
-                render(view, size: NSSize(width: 320, height: 130), appearance: appearance,
+                render(view, size: NSSize(width: 276 + 52, height: 64 + 26 + 20), appearance: appearance,
                        to: out.appendingPathComponent("pastille-\(suffix)-ecoute.png"))
 
                 // 2. Le pop-up « rien à coller ».
                 DictationController.shared.setPhaseForSnapshot(
                     .savedToHistory("Je voulais te dire que la réunion de demain est décalée à 16 h."))
-                render(view, size: NSSize(width: 440, height: 150), appearance: appearance,
+                render(view, size: NSSize(width: 430 + 52, height: 96 + 26 + 20), appearance: appearance,
                        to: out.appendingPathComponent("pastille-\(suffix)-popup.png"))
             }
         }
