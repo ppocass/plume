@@ -287,20 +287,14 @@ struct PillView: View {
     /// même filet et la même ombre que le reste de l'app.
     private struct NotchCardBackground: View {
         var body: some View {
+            // ⚠️ **Plus aucun contour, plus aucune ombre.** Pierre, le
+            // 04/11 : « le contour gris est encore pire ». Le filet clair et
+            // l'ombre portée, sur un panneau collé au bord de l'écran, se
+            // lisaient comme un liseré gris sale. Un aplat franc suffit — la
+            // carte est découpée par le bord supérieur, il n'y a rien à
+            // détourer.
             NotchCardShape()
                 .fill(Color(white: 0.055))
-                // Filet **sur les côtés et le bas seulement** : un contour
-                // complet dessinerait une ligne blanche en travers de la barre
-                // des menus, alors que le haut de la carte est hors écran.
-                .overlay(
-                    NotchCardShape()
-                        .stroke(Color.white.opacity(0.13), lineWidth: 0.75)
-                        .mask(
-                            Rectangle()
-                                .padding(.top, 2)   // laisse la ligne du haut dehors
-                        )
-                )
-                .shadow(color: .black.opacity(0.50), radius: 22, y: 12)
         }
     }
 
