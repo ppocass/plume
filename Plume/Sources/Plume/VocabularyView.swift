@@ -20,7 +20,8 @@ struct VocabularyView: View {
                 }
                 .buttonStyle(.plain)
                 .padding(.vertical, 4)
-                Text(L("Les mots mal reconnus, corrigés automatiquement.", "Misheard words, fixed automatically."))
+                Text(L("Écrivez comment ça sonne, comme vous l'entendriez. Plume reconnaîtra toutes les variantes.",
+                       "Write how it sounds, the way you hear it. Plume picks up every variant."))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -125,7 +126,8 @@ struct VocabEditorSheet: View {
                 Section {
                     ForEach($forms) { $form in
                         HStack {
-                            TextField(L("Forme", "Form"), text: $form.text, prompt: Text(L("Forme mal reconnue", "Misheard form")))
+                            TextField(L("Forme", "Form"), text: $form.text,
+                                      prompt: Text(L("ex. dipsik", "e.g. dipsik")))
                                 .labelsHidden()
                                 .focused($focusedForm, equals: form.id)
                                 .onSubmit { addForm() }
@@ -148,7 +150,19 @@ struct VocabEditorSheet: View {
                     }
                     .buttonStyle(.borderless)
                 } header: {
-                    Text(L("Reconnu à tort comme", "Misheard as"))
+                    Text(L("Comment ça sonne", "How it sounds"))
+                } footer: {
+                    // ⚠️ Le vrai malentendu était ici : le libellé précédent
+                    // (« Reconnu à tort comme ») faisait croire qu'il fallait
+                    // recopier une faute déjà vue. Il faut au contraire écrire
+                    // **comment ça se prononce** — Pierre l'a demandé le
+                    // 04/11 : « écrivez plutôt phonétiquement, avec des vraies
+                    // lettres ». La correction se fait sur les mots entiers,
+                    // l'accent ne casse donc rien.
+                    Text(L("Une par ligne, avec les lettres qui s'entendent. Plume remplace toutes ces graphies par le mot ci-dessus.",
+                           "One per line, using the letters you actually hear. Plume replaces every one of them with the word above."))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
             .formStyle(.grouped)
