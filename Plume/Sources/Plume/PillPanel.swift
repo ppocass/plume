@@ -221,7 +221,6 @@ struct PillView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
-                            .padding(.top, 30)      // la place de la coiffe
                             .background(NotchCardBackground())
                     } else {
                         content
@@ -244,8 +243,18 @@ struct PillView: View {
         var body: some View {
             NotchCardShape()
                 .fill(Color(white: 0.055))
-                .overlay(NotchCardShape().stroke(Color.white.opacity(0.13), lineWidth: 0.75))
-                .shadow(color: .black.opacity(0.50), radius: 20, y: 9)
+                // Filet **sur les côtés et le bas seulement** : un contour
+                // complet dessinerait une ligne blanche en travers de la barre
+                // des menus, alors que le haut de la carte est hors écran.
+                .overlay(
+                    NotchCardShape()
+                        .stroke(Color.white.opacity(0.13), lineWidth: 0.75)
+                        .mask(
+                            Rectangle()
+                                .padding(.top, 2)   // laisse la ligne du haut dehors
+                        )
+                )
+                .shadow(color: .black.opacity(0.50), radius: 22, y: 12)
         }
     }
 
@@ -281,7 +290,7 @@ struct PillView: View {
             // fond reste à la taille du texte et la carte sort plus étroite
             // que sa coiffe.
             .frame(maxWidth: style == .notch ? .infinity : nil)
-            .padding(.horizontal, 12)
+            .padding(.horizontal, style == .notch ? 22 : 12)
             .padding(.vertical, 8)
             // En encoche, le fond est déjà dessiné par `NotchCardBackground`
             // (une seule silhouette) : en remettre un ici produirait un contour
@@ -430,17 +439,26 @@ struct PillView: View {
     }
 
     private func bars(color: Color, thinking: Bool) -> some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
+        // En style « encoche », la carte est large : des barres de 3 pt collées
+        // au milieu donnent l'impression d'un petit objet perdu dans un grand
+        // vide (remarque de Pierre). On les **étire** pour qu'elles occupent la
+        // largeur, comme un vrai niveau audio.
+        let wide = style == .notch
+        let barWidth: CGFloat = wide ? 7 : 3
+        let spacing: CGFloat = wide ? 9 : 2.5
+        let maxHeight: CGFloat = wide ? 28 : 18
+        return TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
-            HStack(alignment: .center, spacing: 2.5) {
+            HStack(alignment: .center, spacing: spacing) {
                 ForEach(0..<LevelMeter.barCount, id: \.self) { i in
                     Capsule()
                         .fill(color)
-                        .frame(width: 3, height: height(i, t: t, thinking: thinking))
+                        .frame(width: barWidth, height: height(i, t: t, thinking: thinking))
                 }
             }
-            .frame(height: 18)
+            .frame(height: maxHeight)
         }
+        .frame(maxWidth: wide ? .infinity : nil)
         .shadow(color: color.opacity(0.5), radius: 4)
     }
 
@@ -483,32 +501,27 @@ private struct PillLabelStyle: LabelStyle {
 /// et l'ensemble ne ressemblait plus à une encoche mais à deux blocs collés.
 /// Ici il n'y a qu'un contour, donc rien à raccorder.
 struct NotchCardShape: Shape {
-    /// Largeur de la coiffe (l'encoche du MacBook fait ~200 pt).
-    var capWidth: CGFloat = 200
-    /// Hauteur de la coiffe (la barre des menus fait 37 pt).
-    var capHeight: CGFloat = 32
     /// Arrondi du bas de la carte — un arrondi macOS, pas un demi-cercle.
     var corner: CGFloat = 14
 
+    /// **Une seule silhouette, pleine largeur.**
+    ///
+    /// Version du 04/11 : Pierre a signalé, capture à l'appui, que le
+    /// **décrochement** laissait deux « épaules » visibles dans la barre des
+    /// menus, et que « ça fait bizarre ». La coiffe n'est donc plus plus étroite
+    /// que la carte : le noir est **continu jusqu'au bord supérieur**, sur toute
+    /// la largeur, avec seulement les deux coins du bas arrondis. Ça lit comme
+    /// un panneau qui descend de la barre — plus de marche, plus de vide.
     func path(in rect: CGRect) -> Path {
         var p = Path()
-        let capLeft = rect.midX - capWidth / 2
-        let capRight = rect.midX + capWidth / 2
-        let bottomY = rect.maxY
-        let cardTop = rect.minY + capHeight
-
-        p.move(to: CGPoint(x: capLeft, y: rect.minY))
-        p.addLine(to: CGPoint(x: capRight, y: rect.minY))
-        p.addLine(to: CGPoint(x: capRight, y: cardTop))
-        p.addLine(to: CGPoint(x: rect.maxX, y: cardTop))
-        p.addLine(to: CGPoint(x: rect.maxX, y: bottomY - corner))
-        p.addQuadCurve(to: CGPoint(x: rect.maxX - corner, y: bottomY),
-                       control: CGPoint(x: rect.maxX, y: bottomY))
-        p.addLine(to: CGPoint(x: rect.minX + corner, y: bottomY))
-        p.addQuadCurve(to: CGPoint(x: rect.minX, y: bottomY - corner),
-                       control: CGPoint(x: rect.minX, y: bottomY))
-        p.addLine(to: CGPoint(x: rect.minX, y: cardTop))
-        p.addLine(to: CGPoint(x: capLeft, y: cardTop))
+        p.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - corner))
+        p.addQuadCurve(to: CGPoint(x: rect.maxX - corner, y: rect.maxY),
+                       control: CGPoint(x: rect.maxX, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX + corner, y: rect.maxY))
+        p.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.maxY - corner),
+                       control: CGPoint(x: rect.minX, y: rect.maxY))
         p.closeSubpath()
         return p
     }
