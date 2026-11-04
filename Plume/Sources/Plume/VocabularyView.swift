@@ -7,8 +7,6 @@ struct VocabularyView: View {
     @EnvironmentObject var vocabulary: VocabularyStore
     @State private var search = ""
     @State private var editing: VocabEntry?
-    /// Le mot dont on enregistre la prononciation (feuille d'écoute).
-    @State private var recording: VocabEntry?
 
     var body: some View {
         List {
@@ -54,10 +52,6 @@ struct VocabularyView: View {
                     }
                     .buttonStyle(.plain)
                     .contextMenu {
-                        Button(L("Enregistrer la phonétique…", "Record how it sounds…")) {
-                            PronounceRecorder.shared.start(for: entry.word)
-                            recording = entry
-                        }
                         Button(L("Modifier…", "Edit…")) { editing = entry }
                         Button(L("Supprimer", "Delete"), role: .destructive) { vocabulary.remove(entry.id) }
                     }
@@ -75,9 +69,6 @@ struct VocabularyView: View {
         }
         .sheet(item: $editing) { entry in
             VocabEditorSheet(entry: entry, isNew: !vocabulary.items.contains { $0.id == entry.id })
-        }
-        .sheet(item: $recording, onDismiss: { PronounceRecorder.shared.cancel() }) { entry in
-            PronounceSheet(entry: entry)
         }
     }
 
@@ -102,7 +93,6 @@ struct VocabEditorSheet: View {
     let isNew: Bool
     @State private var word: String
     @State private var forms: [HeardForm]
-    @State private var listening = false
     /// Le curseur va tout seul dans le champ qu'on vient d'ajouter.
     @FocusState private var focusedForm: UUID?
     @FocusState private var wordFocused: Bool
@@ -159,17 +149,6 @@ struct VocabEditorSheet: View {
                         Label(L("Ajouter", "Add"), systemImage: "plus")
                     }
                     .buttonStyle(.borderless)
-                    // Le même geste que dans le menu du mot, mais là où on
-                    // rédige la fiche : on parle au lieu d'écrire.
-                    Button {
-                        PronounceRecorder.shared.start(for: word)
-                        listening = true
-                    } label: {
-                        Label(L("Enregistrer la phonétique…", "Record how it sounds…"),
-                              systemImage: "mic.fill")
-                    }
-                    .buttonStyle(.borderless)
-                    .disabled(word.trimmingCharacters(in: .whitespaces).isEmpty)
                 } header: {
                     Text(L("Comment ça sonne", "How it sounds"))
                 } footer: {
@@ -209,19 +188,6 @@ struct VocabEditorSheet: View {
             .padding(.bottom, 16)
         }
         .frame(width: 440, height: 440)
-        .sheet(isPresented: $listening, onDismiss: { PronounceRecorder.shared.cancel() }) {
-            // On réutilise la feuille d'écoute ; elle ajoute au mot en base,
-            // et ici on veut aussi voir la graphie dans la fiche.
-            PronounceSheet(entry: VocabEntry(word: word))
-        }
-        .onChange(of: PronounceRecorder.shared.state) { _, new in
-            if case .got(let text) = new, !text.isEmpty {
-                // Le résultat arrive : on l'ajoute à la fiche en cours d'édition.
-                forms.append(HeardForm(text: text))
-                PronounceRecorder.shared.reset()
-                listening = false
-            }
-        }
         .onAppear {
             // Nouveau mot : curseur sur le mot ; mot existant : sur la 1re forme vide.
             if isNew { wordFocused = true } else if let empty = forms.first(where: { $0.text.isEmpty }) { focusedForm = empty.id }
@@ -278,125 +244,5 @@ struct CorrectWordSheet: View {
         }
         .padding(20)
         .frame(width: 420)
-    }
-}
-
-/// La petite feuille « Enregistrer la phonétique » : on appuie, on prononce,
-/// Plume écrit ce qu'il entend et l'ajoute au mot.
-///
-/// Le résultat **n'est pas imposé** : Pierre le voit, peut le corriger à la
-/// main s'il est faux, puis valider. C'est important — un moteur peut se
-/// tromper, et c'est justement sur les noms propres qu'il se trompe.
-struct PronounceSheet: View {
-    @EnvironmentObject var vocabulary: VocabularyStore
-    @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var rec = PronounceRecorder.shared
-
-    let entry: VocabEntry
-    @State private var heard = ""
-
-    var body: some View {
-        VStack(spacing: 18) {
-            VStack(spacing: 6) {
-                Text(entry.word).font(.title2.weight(.semibold))
-                Text(L("Prononcez-le comme vous le dites d'habitude.",
-                       "Say it the way you normally say it."))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-
-            stateView
-
-            if !heard.isEmpty {
-                TextField(L("Entendu", "Heard"), text: $heard)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.body.monospaced())
-                    .frame(width: 260)
-                    .focusEffectDisabled()
-            }
-
-            HStack {
-                Button(L("Annuler", "Cancel"), role: .cancel) {
-                    rec.cancel()
-                    dismiss()
-                }
-                .keyboardShortcut(.cancelAction)
-
-                Spacer()
-
-                switch rec.state {
-                case .got:
-                    Button(L("Ajouter", "Add")) {
-                        vocabulary.add(word: entry.word, variant: heard)
-                        rec.reset()
-                        dismiss()
-                    }
-                    .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.borderedProminent)
-                    .disabled(heard.trimmingCharacters(in: .whitespaces).isEmpty)
-                case .listening:
-                    Button(L("Terminer", "Stop")) { rec.finish() }
-                        .buttonStyle(.borderedProminent)
-                default:
-                    Button(L("Réécouter", "Record again")) {
-                        heard = ""
-                        rec.start(for: entry.word)
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-            }
-        }
-        .padding(24)
-        .frame(width: 400)
-        .onAppear {
-            rec.onResult = { text in heard = text }
-            rec.start(for: entry.word)
-        }
-        .onDisappear { rec.cancel() }
-    }
-
-    @ViewBuilder
-    private var stateView: some View {
-        switch rec.state {
-        case .idle, .listening:
-            VStack(spacing: 10) {
-                Image(systemName: "waveform")
-                    .font(.system(size: 34, weight: .light))
-                    .foregroundStyle(Color.plumeAccent)
-                    .symbolEffect(.variableColor.iterative, isActive: true)
-                Text(L("J'écoute…", "Listening…"))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(height: 90)
-        case .working:
-            VStack(spacing: 10) {
-                ProgressView()
-                Text(L("J'écris ce que j'entends…", "Writing what I hear…"))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(height: 90)
-        case .got:
-            VStack(spacing: 6) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 30))
-                    .foregroundStyle(Color.plumeDone)
-                Text(L("Voilà ce que j'ai entendu. Corrigez si besoin.",
-                       "Here's what I heard. Fix it if it's off."))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .frame(height: 90)
-        case .failed(let message):
-            VStack(spacing: 6) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 26))
-                    .foregroundStyle(.orange)
-                Text(message).font(.callout).foregroundStyle(.secondary)
-            }
-            .frame(height: 90)
-        }
     }
 }
