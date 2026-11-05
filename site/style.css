@@ -149,3 +149,28 @@ footer { text-align: center; color: var(--muted); padding: 24px 16px 40px; borde
   .marquee { -webkit-mask-image: none; mask-image: none; }
   .button, .lang { transition: none; }
 }
+
+/* --- 1337 --- */
+.leet { padding: 44px 0 8px; max-width: 720px; margin: 0 auto; }
+.leet .lead { color: var(--muted); margin: 0 0 26px; font-size: 1.05rem; }
+.leet-demo {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 20px;
+  padding: 26px 28px; display: flex; flex-direction: column; gap: 10px;
+}
+.leet-row { display: flex; flex-direction: column; gap: 6px; }
+.leet-tag {
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--muted); font-weight: 600;
+}
+.leet-plain, .leet-out {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: 0.95rem; line-height: 1.5; word-break: break-word;
+}
+.leet-plain { color: var(--muted); }
+.leet-out { color: #4F46E5; font-weight: 600; }
+.leet-arrow { color: var(--muted); font-size: 1rem; padding-left: 2px; }
+.leet-points { display: grid; gap: 14px; padding: 26px 0 40px; }
+.leet-points p { margin: 0; color: var(--muted); line-height: 1.55; }
+.leet-points strong { color: var(--text); font-weight: 600; }
+
+@media (prefers-color-scheme: dark) { .leet-out { color: #8B93FF; } }
