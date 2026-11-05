@@ -57,7 +57,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         // Chaque entrée a son icône : macOS en met d'office à certaines (Réglages,
         // Quitter), et les autres paraîtraient décalées.
         for (title, selector, symbol) in [(L("Historique…", "History…"), #selector(openHistory), "clock.arrow.circlepath"),
-                                          (L("Réglages…", "Settings…"), #selector(openSettings), "gearshape")] {
+                                          (L("Réglages…", "Settings…"), #selector(openSettings), "gearshape"),
+                                          (L("Soutenir Plume…", "Support Plume…"), #selector(openSupport), "cup.and.saucer")] {
             let entry = NSMenuItem(title: title, action: selector, keyEquivalent: "")
             entry.target = self
             entry.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
@@ -73,6 +74,13 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     @objc private func copyLatest() { DictationController.shared.copyLatest() }
     @objc private func openHistory() { MainWindowController.shared.show(section: .history) }
     @objc private func openSettings() { MainWindowController.shared.show(section: .settings) }
+
+    /// Ouvre la page de pourboire (Plume reste libre et MIT : rien n'est
+    /// verrouillé, c'est juste un merci possible).
+    @objc private func openSupport() {
+        guard Support.isConfigured, let url = URL(string: Support.url) else { return }
+        NSWorkspace.shared.open(url)
+    }
 
     /// Une plume au trait (style des symboles de macOS), en image « modèle » :
     /// macOS la teinte selon la barre des menus. Tracé de

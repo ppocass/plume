@@ -44,7 +44,8 @@ final class OnboardingWindowController: NSObject, NSWindowDelegate {
     }
 
     private func finish() {
-        Prefs.shared.onboardingDone = true
+        // Les deux preuves d'un coup (préférence + date) : voir `Prefs`.
+        Prefs.shared.markOnboardingDone()
         window?.close()
         MainWindowController.shared.show()
     }
@@ -116,12 +117,23 @@ struct OnboardingView: View {
 
     private var footer: some View {
         HStack {
-            Button(L("Retour", "Back")) { go(-1) }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .opacity(model.step == 0 ? 0 : 1)
-                .disabled(model.step == 0)
-                .frame(width: 110, alignment: .leading)
+            if model.step == 0 {
+                // « Passer » : tout de suite des réglages qui marchent, sans
+                // parcourir sept écrans. Constaté le 04/11 : « il y a des gens qui
+                // trouvent ça chiant ».
+                Button(L("Passer", "Skip")) { skip() }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .help(L("Utiliser les réglages par défaut", "Use the default settings"))
+                    .frame(width: 110, alignment: .leading)
+            } else {
+                Button(L("Retour", "Back")) { go(-1) }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .opacity(model.step == 0 ? 0 : 1)
+                    .disabled(model.step == 0)
+                    .frame(width: 110, alignment: .leading)
+            }
             Spacer()
             HStack(spacing: 7) {
                 ForEach(steps.indices, id: \.self) { i in
@@ -141,6 +153,40 @@ struct OnboardingView: View {
         }
         .padding(.horizontal, 28)
         .padding(.vertical, 22)
+    }
+
+    /// « Passer » : on applique des réglages par défaut **utilisables tout de
+    /// suite**, et on ferme l'assistant.
+    ///
+    /// Ce que l'utilisateur a demandé le 04/11 : interface en anglais, détection
+    /// automatique de la langue, Parakeet, 35 s avant de rendre la mémoire, la
+    /// pastille au centre, apparence claire. Ce sont déjà les défauts de l'app —
+    /// on les **écrit explicitement** plutôt que de compter sur eux, parce
+    /// qu'une personne qui passe a peut-être déjà touché un réglage, et parce
+    /// qu'un défaut qui changerait un jour ne doit pas changer son app.
+    ///
+    /// ⚠️ **Les autorisations restent à donner.** Micro et Accessibilité sont
+    /// des permissions macOS : aucun réglage ne peut les accorder à la place de
+    /// la personne. On ouvre donc les deux demandes, et la fenêtre principale
+    /// affiche ce qui manque — c'est le seul passage obligé.
+    private func skip() {
+        prefs.appLanguage = .en
+        prefs.language = .auto
+        prefs.appearance = .light
+        prefs.pillStyle = .bottom
+        prefs.engineIdle = 35
+
+        if let recommended = ModelCatalog.model(ModelCatalog.recommendedDefault()),
+           !models.isInstalled(recommended) || recommended.id != models.selectedID {
+            models.use(recommended)
+        }
+
+        // Les deux autorisations sans lesquelles Plume ne peut rien faire.
+        if permissions.microphone == .notDetermined { permissions.requestMicrophone() }
+        if !permissions.accessibility { permissions.requestAccessibility() }
+
+        Log.info("assistant : passé — réglages par défaut appliqués")
+        finish()
     }
 
     private func go(_ delta: Int) {

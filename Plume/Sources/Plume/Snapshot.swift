@@ -26,9 +26,14 @@ enum Snapshot {
         let keys = ["appLanguage", "appAppearance", "polishService"]
         let saved = keys.map { d.object(forKey: $0) }
         defer { for (k, v) in zip(keys, saved) { d.set(v, forKey: k) } }
+        pills(into: out)
         for lang in AppLanguage.allCases {
             d.set(lang.rawValue, forKey: "appLanguage")
             for dark in [false, true] {
+                // Le thème passe par Prefs **et** par l'apparence de la fenêtre :
+                // `PillView` lit `@Environment(\.colorScheme)`, qui dépend de
+                // l'apparence de la fenêtre de rendu.
+                Prefs.shared.appearance = dark ? .dark : .light
                 let appearance = NSAppearance(named: dark ? .darkAqua : .aqua)!
                 let suffix = "\(lang.rawValue)-\(dark ? "sombre" : "clair")"
                 let model = OnboardingModel()
@@ -44,6 +49,51 @@ enum Snapshot {
                 }
             }
         }
+    }
+
+    /// Les trois styles de pastille, rendus hors écran — vérification visuelle
+    /// sans toucher au vrai panneau ni aux réglages.
+    ///
+    /// On dessine directement `PillView`, dans les tailles réelles du panneau,
+    /// en clair et en sombre. C'est ce que l'utilisateur voit à l'écran.
+    static func pills(into out: URL) {
+        let savedPhase = DictationController.shared.phase
+        let savedStyle = Prefs.shared.pillStyle
+        let savedAppearance = Prefs.shared.appearance
+        defer {
+            Prefs.shared.pillStyle = savedStyle
+            Prefs.shared.appearance = savedAppearance
+            DictationController.shared.setPhaseForSnapshot(savedPhase)
+        }
+
+        for style in PillStyle.allCases {
+            for dark in [false, true] {
+                Prefs.shared.pillStyle = style
+                // Le thème passe par Prefs **et** par l'apparence de la fenêtre :
+                // `PillView` lit `@Environment(\.colorScheme)`, qui dépend de
+                // l'apparence de la fenêtre de rendu.
+                Prefs.shared.appearance = dark ? .dark : .light
+                let appearance = NSAppearance(named: dark ? .darkAqua : .aqua)!
+                let suffix = "\(style.rawValue)-\(dark ? "sombre" : "clair")"
+
+                // La **vraie** vue : ce que l'utilisateur verra, pas une copie.
+                let view = PillView()
+                    .environmentObject(DictationController.shared)
+                    .environmentObject(DictationController.shared.meter)
+
+                // 1. La pastille d'écoute.
+                DictationController.shared.setPhaseForSnapshot(.recording)
+                render(view, size: NSSize(width: 276 + 52, height: 64 + 26 + 20), appearance: appearance,
+                       to: out.appendingPathComponent("pastille-\(suffix)-ecoute.png"))
+
+                // 2. Le pop-up « rien à coller ».
+                DictationController.shared.setPhaseForSnapshot(
+                    .savedToHistory("Je voulais te dire que la réunion de demain est décalée à 16 h."))
+                render(view, size: NSSize(width: 430 + 52, height: 96 + 26 + 20), appearance: appearance,
+                       to: out.appendingPathComponent("pastille-\(suffix)-popup.png"))
+            }
+        }
+        DictationController.shared.setPhaseForSnapshot(savedPhase)
     }
 
     private static func render<V: View>(_ view: V, size: NSSize, appearance: NSAppearance, to url: URL) {

@@ -17,8 +17,44 @@ struct Dictation: Codable, Identifiable, Equatable {
     /// La transcription a échoué : l'audio est gardé pour « Réessayer ».
     var failed: Bool = false
     var audioFile: String?
+    /// Dictée 1337 : `text` est le texte maquillé, `raw` garde l'original.
+    var leet: Bool = false
 
     var wordCount: Int { text.split(whereSeparator: { $0.isWhitespace }).count }
+
+    /// Décodage à la main pour une seule raison : `leet` est arrivé après coup,
+    /// et les 200 dictées déjà écrites (sans cette clé) doivent se relire
+    /// telles quelles, pas partir à la Corbeille comme un fichier abîmé.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        date = try c.decode(Date.self, forKey: .date)
+        text = try c.decode(String.self, forKey: .text)
+        raw = try c.decode(String.self, forKey: .raw)
+        polished = try c.decode(Bool.self, forKey: .polished)
+        pasted = try c.decode(Bool.self, forKey: .pasted)
+        appName = try c.decodeIfPresent(String.self, forKey: .appName)
+        audioSeconds = try c.decode(Double.self, forKey: .audioSeconds)
+        failed = try c.decodeIfPresent(Bool.self, forKey: .failed) ?? false
+        audioFile = try c.decodeIfPresent(String.self, forKey: .audioFile)
+        leet = try c.decodeIfPresent(Bool.self, forKey: .leet) ?? false
+    }
+
+    init(id: UUID = UUID(), date: Date, text: String, raw: String, polished: Bool, pasted: Bool,
+         appName: String?, audioSeconds: Double, failed: Bool = false, audioFile: String? = nil,
+         leet: Bool = false) {
+        self.id = id
+        self.date = date
+        self.text = text
+        self.raw = raw
+        self.polished = polished
+        self.pasted = pasted
+        self.appName = appName
+        self.audioSeconds = audioSeconds
+        self.failed = failed
+        self.audioFile = audioFile
+        self.leet = leet
+    }
 }
 
 /// L'historique, dans `~/Library/Application Support/Plume/historique.json`.
@@ -130,6 +166,32 @@ final class HistoryStore: ObservableObject {
         totals.dictations += 1
         totals.words += d.wordCount
         saveTotals()
+    }
+
+    /// Bascule une dictée entre texte normal et 1337 — le rattrapage demandé
+    /// par l'utilisateur le 05/11 (on s'aperçoit trop tard qu'on voulait du leet).
+    ///
+    /// **Réversible**, et sans jamais perdre le texte d'origine :
+    /// - aller en 1337 → on maquille **`raw`** (le texte vraiment dit), pas
+    ///   `text` (qui pourrait déjà être maquillé) ;
+    /// - revenir → on remet `raw` tel quel.
+    ///
+    /// ⚠️ Le texte **lissé** n'est donc pas restauré au retour : on revient au
+    /// brut. C'est un choix assumé — garder les deux versions demanderait un
+    /// champ de plus dans l'historique, et le brut est justement ce que l'utilisateur
+    /// veut retrouver quand il regrette le 1337.
+    func toggleLeet(_ item: Dictation) {
+        var d = item
+        guard !d.raw.isEmpty else { return }
+        if d.leet {
+            d.text = d.raw
+            d.leet = false
+        } else {
+            d.text = Leet.transform(d.raw, level: Prefs.shared.leetLevel)
+            d.leet = true
+        }
+        replace(d)
+        Log.info("historique : dictée basculée en \(d.leet ? "1337" : "texte normal")")
     }
 
     func replace(_ d: Dictation) {

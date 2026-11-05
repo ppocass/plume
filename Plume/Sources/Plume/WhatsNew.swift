@@ -14,6 +14,17 @@ struct ReleaseNotes {
     let pages: [Page]
 
     static let all: [ReleaseNotes] = [
+        ReleaseNotes(version: "1.5", pages: [
+            Page(symbol: "textformat.alt", titleFR: "Dictée 1337", titleEN: "1337 dictation",
+                 textFR: "Dictez normalement, puis terminez avec votre raccourci 1337 : ce texte part en leet speak. Un onglet 1337 permet aussi de convertir du texte déjà écrit.",
+                 textEN: "Dictate as usual, then finish with your 1337 shortcut: that text comes out in leetspeak. A 1337 tab also converts text you already have."),
+            Page(symbol: "rectangle.topthird.inset.filled", titleFR: "Nouveaux styles de pastille", titleEN: "New indicator styles",
+                 textFR: "Trois emplacements : en bas au-dessus du Dock, en haut, ou en carte qui descend de l'encoche. Verre dépoli macOS, plus l'aplat noir.",
+                 textEN: "Three positions: bottom above the Dock, top, or a card sliding out of the notch. Real macOS material instead of a black slab."),
+            Page(symbol: "forward.end", titleFR: "Passer la configuration", titleEN: "Skip the setup",
+                 textFR: "Un bouton Passer sur le premier écran : des réglages qui marchent tout de suite, sans parcourir sept étapes.",
+                 textEN: "A Skip button on the first screen: working settings straight away, without going through seven steps."),
+        ]),
         ReleaseNotes(version: "1.4", pages: [
             Page(symbol: "text.append", titleFR: "Commandes vocales", titleEN: "Voice commands",
                  textFR: "Dites « à la ligne », « nouveau paragraphe », « ouvrez la parenthèse… fermez la parenthèse » ou « point d'interrogation ». Réglages → Dictée.",

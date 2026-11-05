@@ -131,6 +131,9 @@ struct HistoryRow: View {
                     if !item.pasted && !item.failed {
                         Tag(text: L("Non inséré", "Not inserted"), color: .plumeTheme)
                     }
+                    if item.leet {
+                        Tag(text: "1337", color: .plumeTheme)
+                    }
                     if item.polished {
                         Tag(text: L("Nettoyé", "Cleaned"), color: .secondary)
                     }
@@ -162,11 +165,18 @@ struct HistoryRow: View {
         .contextMenu {
             if !item.failed {
                 Button(L("Copier", "Copy")) { copy(item.text) }
-                if item.polished && item.raw != item.text {
+                if (item.polished || item.leet) && item.raw != item.text {
                     Button(L("Copier le texte brut", "Copy Raw Text")) { copy(item.raw) }
                 }
                 Divider()
                 Button(L("Corriger un mot…", "Fix a Word…")) { correcting = true }
+                // Le rattrapage, demandé par l'utilisateur le 05/11 : transformer
+                // après coup un texte déjà dicté, même plusieurs jours après.
+                // Le texte d'origine reste dans `raw`, donc c'est réversible.
+                Button(item.leet ? L("Remettre en texte normal", "Back to Normal Text")
+                     : L("Réécrire en 1337", "Rewrite as 1337")) {
+                    history.toggleLeet(item)
+                }
                 Divider()
             }
             Button(L("Supprimer", "Delete"), role: .destructive) { history.remove(item.id) }

@@ -33,6 +33,23 @@ Say "new line", "new paragraph", "open parenthesis ... close parenthesis" or "qu
 
 Prefer another key? Pick any shortcut in Settings. With fn, set System Settings > Keyboard > "Press 🌐 key to" to "Do Nothing" so macOS doesn't open the emoji picker at the same time.
 
+### 1337 dictation
+
+Give yourself a second shortcut (⌘ + ⌥ by default) and you can decide **how the sentence ends**:
+
+- finish with your usual shortcut → plain text;
+- finish with the 1337 shortcut → that dictation comes out in leetspeak (`a→4`, `e→3`, `i→1`, `o→0`, `s→5`, `t→7`).
+
+The style is picked **when you stop**, not when you start, so noticing halfway through a sentence costs nothing. Three levels, from light to full, in the **1337** tab.
+
+That tab also has a **converter**: paste any text, the 1337 version appears underneath at the level you chose, one button copies it. It is purely mechanical — no model, no network, no key — and links, email addresses and file paths are never altered. The same text always gives the same result, so you can still read back what you wrote.
+
+Right-click any dictation in History to switch it to 1337, or back.
+
+## Indicator styles
+
+Settings → Indicator places the pill where you want it: **bottom** (above the Dock, the classic), **top**, or **notch** — a card that slides out of the notch area at the top of the screen. All three use the system's frosted material. On a Mac without a notch, the notch style simply glides in from the top edge.
+
 ## Models
 
 The setup assistant picks the model that suits your Mac. You can change it later in the Models page.

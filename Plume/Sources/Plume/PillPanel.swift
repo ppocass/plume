@@ -1,16 +1,24 @@
 import AppKit
 import SwiftUI
 
-/// La pastille flottante en bas de l'écran.
+/// La pastille flottante.
 ///
 /// Invisible au repos : elle n'existe à l'écran que pendant une dictée et
 /// juste après (le temps de dire « collé », ou le pop-up « rien à coller »).
 /// Panneau **non activant** : cliquer dessus ne vole pas le focus de l'app où
 /// l'on écrit (sauf pour ouvrir la fenêtre, ce qui est voulu).
 ///
-/// Elle **s'ouvre plus large** quand il n'y avait pas de
-/// champ où écrire : elle montre alors le début du texte, et **un clic dessus
-/// le copie** dans le presse-papiers (voir `PillView`).
+/// **Elle ne prend aucune place dans la barre des menus** : c'est une fenêtre
+/// sans bordure qui se dessine *par-dessus*, elle ne demande pas d'emplacement.
+///
+/// Deux emplacements (Réglages → Pastille) :
+/// - `bottom` : au-dessus du Dock, l'emplacement historique ;
+/// - `notch` : centrée en haut, à la place de l'encoche. **Sans encoche** (les
+///   MacBook Air M1), elle descend simplement du bord supérieur et s'arrête à
+///   la même hauteur — la distance est calculée pour que ça tombe juste.
+///
+/// Elle **s'ouvre plus large** quand il n'y avait pas de champ où écrire : elle
+/// montre alors le début du texte, et **un clic dessus le copie**.
 final class PillPanel: NSPanel {
     static let shared = PillPanel()
 
@@ -19,7 +27,15 @@ final class PillPanel: NSPanel {
     /// Taille du pop-up « rien à coller » — assez large pour lire l'aperçu.
     static let previewSize = NSSize(width: 430, height: 96)
 
+    /// Hauteur de l'encoche sur les MacBook qui en ont une (menu bar 37 pt).
+
+    /// Marge sous la barre des menus quand il n'y a pas d'encoche.
+
+
     private let hosting: NSHostingView<AnyView>
+    /// Vrai le temps de l'animation de descente : la vue ne joue alors pas sa
+    /// propre transition d'entrée (sinon les deux se cumulent).
+    private(set) var slidingIn = false
 
     private init() {
         hosting = NSHostingView(rootView: AnyView(
@@ -48,34 +64,219 @@ final class PillPanel: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 
-    /// En bas, au centre de l'écran où se trouve la souris (au-dessus du Dock).
-    /// Le **bord bas reste fixe** : la pilule grandit vers le haut quand le
-    /// pop-up s'ouvre, elle ne saute pas de place.
-    private func place(size: NSSize) {
+    private var pillStyle: PillStyle { Prefs.shared.pillStyle }
+    private var hasNotch: Bool { NSScreen.main?.auxiliaryTopLeftArea != nil }
+
+    /// L'écran où se trouve la souris (là où l'utilisateur travaille).
+    /// (Nommée `workScreen` : `screen` est déjà une propriété de `NSWindow`.)
+    private var workScreen: NSScreen? {
         let mouse = NSEvent.mouseLocation
-        let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
-        guard let visible = screen?.visibleFrame else { return }
-        let bottom = isVisible ? frame.minY : visible.minY + 14
-        setFrame(NSRect(x: visible.midX - size.width / 2, y: bottom, width: size.width, height: size.height),
-                 display: false)
+        return NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
     }
 
-    func present() {
-        // La fenêtre prend la taille de ce que montre la pastille à cet instant.
-        let target = DictationController.shared.phase.showsPreview ? Self.previewSize : Self.pillSize
-        if frame.size != target { place(size: target) }
-        if !isVisible {
-            place(size: target)
-            alphaValue = 1
-            orderFrontRegardless()
+    /// La taille de la fenêtre pour une phase donnée.
+    ///
+    /// En style « encoche », la **carte est plus étroite** que la pastille
+    /// d'origine (300 au lieu de 320) : la maquette qui a plu  était
+    /// compacte, et une carte large ne « sort » pas crédiblement d'une encoche.
+    /// Le pop-up garde sa largeur (il doit pouvoir montrer une ligne de texte).
+    /// Marge horizontale laissée à l'ombre de la carte, de chaque côté.
+    ///
+    /// La fenêtre est **plus large que la carte** : sans cette marge, l'ombre
+    /// se fait couper par le bord de la fenêtre et dessine un rectangle à
+    /// angles droits (le défaut signalé par l'utilisateur le 04/11).
+    static let shadowMargin: CGFloat = 26
+    /// Marge verticale : l'ombre descend sous la carte.
+    static let shadowMarginBottom: CGFloat = 26
+
+    private func panelSize(for phase: PillPhase) -> NSSize {
+        // Largeurs : 276 pour l'encoche (un peu plus étroite, demande ),
+        // la taille d'origine pour les autres. Le pop-up garde de quoi lire.
+        let card: NSSize = phase.showsPreview
+            ? Self.previewSize
+            : (pillStyle == .notch ? NSSize(width: 276, height: 64) : Self.pillSize)
+        return NSSize(width: card.width + Self.shadowMargin * 2,
+                      height: card.height + Self.shadowMarginBottom)
+    }
+
+    /// Le cadre cible d'une taille donnée, selon le style.
+    ///
+    /// - `bottom` : **bord bas fixe** au-dessus du Dock — la pastille grandit
+    ///   vers le haut quand le pop-up s'ouvre, elle ne saute pas de place ;
+    /// - `top` et `notch` : **bord haut fixe** au bord de l'écran — elles
+    ///   grandissent vers le bas, comme un panneau qui descend du haut.
+    ///
+    /// Les deux styles du haut remontent **jusqu'au bord supérieur** : c'est la
+    /// vue qui réserve ensuite l'espace voulu (`padding`), ce qui permet à la
+    /// carte « encoche » de coller au bord et à la pastille « en haut » de
+    /// garder son arrondi complet sous la barre des menus.
+    private func targetFrame(size: NSSize) -> NSRect {
+        guard let workScreen else { return NSRect(origin: .zero, size: size) }
+        let visible = workScreen.visibleFrame
+        let x = visible.midX - size.width / 2
+
+        switch pillStyle {
+        case .bottom:
+            let bottom = isVisible && frame.size.height > 0
+                ? frame.minY
+                : visible.minY + 14
+            return NSRect(x: x, y: bottom, width: size.width, height: size.height)
+        case .top, .notch:
+            let maxTop = isVisible && frame.size.height > 0 ? frame.maxY : workScreen.frame.maxY
+            return NSRect(x: x, y: maxTop - size.height, width: size.width, height: size.height)
         }
     }
 
-    func dismiss() {
-        // La vue joue sa propre transition de sortie ; on retire la fenêtre après.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-            guard let self, DictationController.shared.phase == .hidden else { return }
-            self.orderOut(nil)
+    /// Le style a changé dans les Réglages : on replace sans animation.
+    ///
+    /// Pendant une dictée, le panneau est visible : on le remet en place tout
+    /// de suite, sinon il resterait à l'ancien emplacement jusqu'au prochain
+    /// affichage et l'utilisateur croirait que le réglage n'a rien fait.
+    func styleChanged() {
+        guard isVisible else { return }
+        let target = panelSize(for: DictationController.shared.phase)
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.28
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            animator().setFrame(targetFrame(size: target), display: true)
+        }
+    }
+
+    func present() {
+        // 🔴 **La pastille suit l'apparence de l'app, pas celle du système.**
+        // Le panneau flottant n'hérite pas de `NSApp.appearance` : sans cette
+        // ligne, il restait clair même quand Plume était en sombre, et inversement.
+        appearance = NSApp.appearance
+        // La fenêtre prend la taille de ce que montre la pastille à cet instant.
+        let target = panelSize(for: DictationController.shared.phase)
+        let goal = targetFrame(size: target)
+
+        if !isVisible {
+            if pillStyle.hangsFromTop {
+                slideIn(to: goal)
+            } else {
+                setFrame(goal, display: false)
+                alphaValue = 1
+                orderFrontRegardless()
+            }
+            return
+        }
+        if frame != goal {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.22
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                animator().setFrame(goal, display: true)
+            }
+        }
+    }
+
+    /// L'entrée du style « encoche » : la pastille **descend du bord supérieur**
+    /// et se pose à sa place, avec un ressort. Elle part de 40 pt plus haut et
+    /// glisse en 0,42 s : assez pour qu'on voie d'où elle vient, assez court
+    /// pour ne pas faire attendre pendant une dictée.
+    private func slideIn(to goal: NSRect) {
+        // ⚠️ **Un vrai glissement, pas un fondu.** Constaté le 04/11 :
+        // « tu m'as fait une animation d'apparition, moi je voulais un truc qui
+        // glisse depuis le haut ». La carte part donc **entièrement hors de
+        // l'écran**, au-dessus du bord, et descend. Elle est **opaque dès le
+        // premier pixel** : c'est la position qui fait tout.
+        var start = goal
+        start.origin.y = goal.maxY + 4        // juste au-dessus du bord supérieur
+        setFrame(start, display: false)
+        alphaValue = 1
+        slidingIn = true
+        orderFrontRegardless()
+
+        Log.info(String(format: "glissement : départ y=%.0f → arrivée y=%.0f (course %.0f pt)",
+                        start.origin.y, goal.origin.y, start.origin.y - goal.origin.y))
+
+        // 🔴 **`NSAnimationContext` + `animator()` NE MARCHE PAS ici**, et c'était
+        // la vraie cause du problème depuis le début. Mesuré le 05/11 : la
+        // fenêtre passait de y=904 à y=810 **entre deux images**, sans aucune
+        // position intermédiaire — un saut, pas un glissement. Un `NSPanel`
+        // sans bordure n'anime pas son cadre par ce chemin, et le fondu de la
+        // vue finissait par masquer le tout.
+        //
+        // On fait donc l'animation **nous-mêmes**, à 60 images par seconde, avec
+        // une décélération cubique. C'est plus de code, mais c'est le seul
+        // moyen d'être certain que ça bouge — et c'est vérifiable.
+        animateFrame(from: start, to: goal, duration: 0.34)
+    }
+
+    private var animationTimer: Timer?
+
+    /// Déplace la fenêtre image par image. `easeOut` cubique : départ rapide,
+    /// arrivée qui se pose.
+    private func animateFrame(from: NSRect, to: NSRect, duration: Double) {
+        animationTimer?.invalidate()
+        let startTime = ProcessInfo.processInfo.systemUptime
+        let step = 1.0 / 60.0
+
+        animationTimer = Timer.scheduledTimer(withTimeInterval: step, repeats: true) { [weak self] timer in
+            guard let self else { timer.invalidate(); return }
+            let elapsed = ProcessInfo.processInfo.systemUptime - startTime
+            let t = min(1, elapsed / duration)
+            let eased = 1 - pow(1 - t, 3)          // easeOut cubique
+            let y = from.origin.y + (to.origin.y - from.origin.y) * CGFloat(eased)
+            self.setFrameOrigin(NSPoint(x: to.origin.x, y: y))
+            if t >= 1 {
+                timer.invalidate()
+                self.animationTimer = nil
+                self.setFrame(to, display: true)
+                self.slidingIn = false
+                Log.info(String(format: "glissement : arrivé y=%.0f en %.2fs",
+                                self.frame.origin.y, duration))
+            }
+        }
+    }
+
+    /// La sortie : la carte **remonte** hors de l'écran, symétrique de l'entrée.
+    /// Avant, elle disparaissait par un simple retrait de la fenêtre — ce qui
+    /// donnait l'impression qu'elle s'évaporait.
+    func slideOut(completion: @escaping () -> Void = {}) {
+        guard isVisible else { completion(); return }
+        // ⚠️ Il faut aller **complètement** au-dessus de l'écran : `frame.maxY`
+        // de la fenêtre elle-même ne suffit pas, sinon la carte s'arrête encore
+        // visible en haut et la disparition paraît brutalement coupée.
+        var out = frame
+        out.origin.y = (screen?.frame.maxY ?? frame.maxY) + 10
+        animateFrameOut(from: frame, to: out, duration: 0.22, completion: completion)
+    }
+
+    private func animateFrameOut(from: NSRect, to: NSRect, duration: Double,
+                                 completion: @escaping () -> Void) {
+        animationTimer?.invalidate()
+        let startTime = ProcessInfo.processInfo.systemUptime
+        animationTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] timer in
+            guard let self else { timer.invalidate(); return }
+            let elapsed = ProcessInfo.processInfo.systemUptime - startTime
+            let t = min(1, elapsed / duration)
+            let eased = t * t                     // easeIn : il s'arrache
+            let y = from.origin.y + (to.origin.y - from.origin.y) * CGFloat(eased)
+            self.setFrameOrigin(NSPoint(x: to.origin.x, y: y))
+            if t >= 1 {
+                timer.invalidate()
+                self.animationTimer = nil
+                completion()
+            }
+        }
+    }
+
+    /// Ferme la pastille. Le `completion` est appelé **une fois la fenêtre
+    /// rangée** — c'est lui qui laisse l'appelant vider son état (`phase`) au
+    /// bon moment, pas avant.
+    func dismiss(completion: @escaping () -> Void = {}) {
+        guard pillStyle.hangsFromTop, isVisible else {
+            orderOut(nil)
+            completion()
+            return
+        }
+        // Du haut : la carte **remonte** hors de l'écran, comme elle est venue.
+        // Le contenu reste affiché pendant tout le trajet — c'est justement ce
+        // qui rend le mouvement visible.
+        slideOut { [weak self] in
+            self?.orderOut(nil)
+            completion()
         }
     }
 }
@@ -92,19 +293,87 @@ struct PillView: View {
     @EnvironmentObject var controller: DictationController
     @EnvironmentObject var meter: LevelMeter
 
+    /// Le style « encoche » fait descendre la fenêtre elle-même : la vue n'a
+    /// alors qu'un fondu à jouer, sinon les deux animations se cumulent et la
+    /// pastille paraît bégayer à l'entrée.
+    private var style: PillStyle { Prefs.shared.pillStyle }
+    private var hangsFromTop: Bool { style.hangsFromTop }
+
+    /// La pastille suit-elle le thème **sombre** ?
+    ///
+    /// ⚠️ On lit `@Environment(\.colorScheme)`, **pas** `NSApp.effectiveAppearance` :
+    /// le panneau a sa propre apparence (posée par `PillPanel`), donc SwiftUI
+    /// sait exactement ce que l'utilisateur voit, et il se met à jour quand le système
+    /// change si l'app est en mode « Système ».
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+
+    /// L'espace entre le bord supérieur de l'écran et le haut de la pastille.
+    ///
+    /// - style « en haut » : la barre des menus (37 pt) + 6 pt, pour que la
+    ///   pastille flotte juste dessous, entièrement arrondie ;
+    /// - style « encoche » : 0 — la carte **colle** au bord supérieur et c'est
+    ///   son raccord plat qui la rattache à l'encoche.
+    private var topInset: CGFloat { style == .notch ? 0 : 43 }
+
     var body: some View {
-        ZStack(alignment: .bottom) {
+        ZStack(alignment: hangsFromTop ? .top : .bottom) {
             Color.clear
             if controller.phase != .hidden {
-                content
-                    .transition(.scale(scale: 0.6, anchor: .bottom).combined(with: .opacity))
-                    .padding(.bottom, 6)
+                Group {
+                    if style == .notch {
+                        // Une seule forme : coiffe + carte, dessinées ensemble.
+                        content
+                            .frame(maxWidth: .infinity)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(NotchCardBackground())
+                    } else {
+                        content
+                    }
+                }
+                .frame(width: style == .notch ? 276 : nil)
+                // 🔴 **Aucune transition pour les styles du haut.**
+                //
+                // C'est CE qui tuait l'animation : la fenêtre glissait bien,
+                // mais la vue jouait **en plus** un fondu d'opacité. Les deux
+                // se superposaient, et comme le fondu part de transparent, on
+                // ne voyait qu'une apparition — la position changeait sans que
+                // l'œil puisse la suivre. Signalé plusieurs fois.
+                // Le glissement est fait par la **fenêtre** (`slideIn`), donc
+                // la vue n'a plus rien à animer en entrée.
+                .transition(hangsFromTop
+                    ? .identity
+                    : .scale(scale: 0.6, anchor: .bottom).combined(with: .opacity))
+                // Marge de chaque côté : l'ombre de la carte a besoin de place
+                // pour s'étaler. Sans elle, le bord de la fenêtre la **coupe
+                // net** — et on voit un rectangle sombre à angles droits autour
+                // de la carte, ce que l'utilisateur a entouré en rouge.
+                .padding(.horizontal, 26)
+                .padding(hangsFromTop ? .top : .bottom, hangsFromTop ? topInset : 6)
+                .padding(.bottom, hangsFromTop ? 26 : 0)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .animation(.spring(response: 0.32, dampingFraction: 0.78), value: controller.phase)
     }
 
+    /// Le fond « encoche » : la silhouette de `NotchCardShape` en noir, avec le
+    /// même filet et la même ombre que le reste de l'app.
+    private struct NotchCardBackground: View {
+        var body: some View {
+            // ⚠️ **Plus aucun contour, plus aucune ombre.** l'utilisateur, le
+            // 04/11 : « le contour gris est encore pire ». Le filet clair et
+            // l'ombre portée, sur un panneau collé au bord de l'écran, se
+            // lisaient comme un liseré gris sale. Un aplat franc suffit — la
+            // carte est découpée par le bord supérieur, il n'y a rien à
+            // détourer.
+            NotchCardShape()
+                .fill(Color(white: 0.055))
+        }
+    }
+
+    /// Ce que montre la pastille, selon l'instant de la dictée.
     @ViewBuilder
     private var content: some View {
         if case .savedToHistory(let text) = controller.phase {
@@ -132,9 +401,16 @@ struct PillView: View {
                     EmptyView()
                 }
             }
-            .padding(.horizontal, 12)
+            // ⚠️ L'ordre compte : `.frame` **avant** `.background`, sinon le
+            // fond reste à la taille du texte et la carte sort plus étroite
+            // que sa coiffe.
+            .frame(maxWidth: style == .notch ? .infinity : nil)
+            .padding(.horizontal, style == .notch ? 22 : 12)
             .padding(.vertical, 8)
-            .background(pillBackground(capsule: true))
+            // En encoche, le fond est déjà dessiné par `NotchCardBackground`
+            // (une seule silhouette) : en remettre un ici produirait un contour
+            // intérieur visible, comme une boîte dans la boîte.
+            .background(style == .notch ? nil : pillBackground(capsule: true))
             .contentShape(Capsule())
             .onTapGesture { controller.pillClicked() }
             .help(tapHelp)
@@ -151,21 +427,23 @@ struct PillView: View {
                     .foregroundStyle(Color.plumeAccent)
                 Text(L("Aucun champ · cliquez pour copier", "No text field · click to copy"))
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.75))
+                    .foregroundStyle(pillText.opacity(0.62))
                 Spacer(minLength: 0)
                 animationCloseButton
             }
             Text(Self.preview(of: text))
                 .font(.system(size: 14))
-                .foregroundStyle(.white.opacity(0.96))
+                .foregroundStyle(pillText)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: style == .notch ? .infinity : nil, alignment: .leading)
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-        .background(pillBackground(capsule: false))
+        // Voir `content` : en encoche, la silhouette est déjà dessinée par le parent.
+        .background(style == .notch ? nil : pillBackground(capsule: false))
         .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .onTapGesture { controller.pillClicked() }
         .help(L("Copier le texte", "Copy text"))
@@ -184,9 +462,9 @@ struct PillView: View {
         } label: {
             Image(systemName: "xmark")
                 .font(.system(size: 7, weight: .heavy))
-                .foregroundStyle(.white.opacity(0.85))
+                .foregroundStyle(pillText.opacity(0.55))
                 .frame(width: 14, height: 14)
-                .background(Circle().fill(Color.white.opacity(0.14)))
+                .background(Circle().fill(pillText.opacity(0.10)))
         }
         .buttonStyle(.plain)
         .help(L("Fermer", "Close"))
@@ -199,43 +477,111 @@ struct PillView: View {
         }
     }
 
+    /// Le fond, selon le style.
+    ///
+    /// - **en bas / en haut** : du **verre dépoli macOS**. C'était le vrai défaut
+    ///   de l'ancienne pastille : `Color.black.opacity(0.88)` posait une tache
+    ///   opaque au-dessus d'une interface entièrement translucide. Ici le fond du
+    ///   bureau transparaît (flouté, éclairci), comme dans le reste du système.
+    /// - **encoche** : une carte **sombre** qui prolonge l'encoche (elle est noire,
+    ///   une carte claire se découperait dessus), avec le même verre par-dessus
+    ///   pour ne pas redevenir l'aplat de départ.
+    ///
+    /// Le texte suit : sombre sur le verre clair, clair sur la carte d'encoche.
     @ViewBuilder
     private func pillBackground(capsule: Bool) -> some View {
-        let shape: AnyShape = capsule
+        let shape: AnyShape = pillShape(capsule: capsule)
+        if style == .notch {
+            // Pas d'arrondi en haut : le raccord avec l'encoche est plat.
+            //
+            // 🔴 **Pas de `.ultraThinMaterial` ici.** Testé le 03/11 : posé
+            // par-dessus un fond clair, le matériau rend **gris moyen** et la
+            // carte perd tout son effet d'encoche — elle ressemble à un bout
+            // de plastique. L'encoche du Mac est **noire** : on l'assume.
+            // Un noir très légèrement translucide garde un peu du fond, sans
+            // jamais virer au gris.
+            shape
+                .fill(Color(white: 0.055).opacity(0.97))
+                .overlay(shape.stroke(Color.white.opacity(0.13), lineWidth: 0.75))
+                .shadow(color: .black.opacity(0.50), radius: 20, y: 9)
+        } else {
+            // ⚠️ **Le voile doit suivre le thème.** Il était figé en blanc à
+            // 30 % : la pastille restait claire même en mode sombre, et
+            // paraissait « super clair » sur une interface noire (remarque de
+            // l'utilisateur, 05/11). En sombre, on assombrit ; le matériau du système,
+            // lui, s'adapte déjà tout seul.
+            shape
+                .fill(.ultraThinMaterial)
+                .overlay(shape.fill(isDark ? Color.black.opacity(0.34) : Color.white.opacity(0.30)))
+                .overlay(shape.stroke(Color.white.opacity(isDark ? 0.20 : 0.55), lineWidth: 0.75))
+                .overlay(shape.stroke(Color.black.opacity(isDark ? 0.28 : 0.10), lineWidth: 0.5).padding(0.5))
+                .shadow(color: .black.opacity(isDark ? 0.42 : 0.22), radius: 14, y: 5)
+                .shadow(color: .black.opacity(0.10), radius: 2, y: 1)
+        }
+    }
+
+    /// La forme : capsule pour la pastille, rectangle arrondi pour le pop-up.
+    /// En style « encoche », les coins du haut sont **droits** pour que la carte
+    /// se fonde dans le bord de l'écran.
+    private func pillShape(capsule: Bool) -> AnyShape {
+        if style == .notch {
+            // ⚠️ **Pas une capsule.** Une capsule a des **demi-cercles** aux
+            // bouts (rayon = moitié de la hauteur) : ça ne ressemble à rien de
+            // macOS. L'encoche d'un MacBook a des coins de **12-14 pt** tout au
+            // plus, et son bas arrondi suit la même famille. On prend donc un
+            // arrondi continu de 14 pt en bas, et **0 en haut** pour que la
+            // carte se fonde dans le bord de l'écran.
+            return AnyShape(UnevenRoundedRectangle(
+                topLeadingRadius: 0, bottomLeadingRadius: 14,
+                bottomTrailingRadius: 14, topTrailingRadius: 0, style: .continuous))
+        }
+        return capsule
             ? AnyShape(Capsule())
             : AnyShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        shape
-            .fill(Color.black.opacity(0.88))
-            .overlay(shape.stroke(Color.white.opacity(0.14), lineWidth: 0.75))
-            .shadow(color: .black.opacity(0.35), radius: 8, y: 3)
     }
+
+    /// La couleur du texte de la pastille : sombre sur le verre clair, clair
+    /// sur la carte sombre du style « encoche ».
+    /// Sombre sur le verre clair, clair sur le verre sombre et sur la carte
+    /// d'encoche. En mode sombre, `.primary` est déjà clair — on ne force donc
+    /// le blanc que pour l'encoche, qui a son propre fond noir.
+    private var pillText: Color { style == .notch ? .white : .primary }
 
     private var cancelButton: some View {
         Button {
             controller.cancelFromPill()
         } label: {
             Image(systemName: "xmark")
-                .font(.system(size: 8, weight: .heavy))
-                .foregroundStyle(.white)
-                .frame(width: 16, height: 16)
-                .background(Circle().fill(Color.red.opacity(0.85)))
+                .font(.system(size: 7, weight: .bold))
+                .foregroundStyle(pillText.opacity(0.62))
+                .frame(width: 15, height: 15)
+                .background(Circle().fill(pillText.opacity(0.10)))
         }
         .buttonStyle(.plain)
         .help(L("Annuler", "Cancel"))
     }
 
     private func bars(color: Color, thinking: Bool) -> some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
+        // En style « encoche », la carte est large : des barres de 3 pt collées
+        // au milieu donnent l'impression d'un petit objet perdu dans un grand
+        // vide (remarque ). On les **étire** pour qu'elles occupent la
+        // largeur, comme un vrai niveau audio.
+        let wide = style == .notch
+        let barWidth: CGFloat = wide ? 7 : 3
+        let spacing: CGFloat = wide ? 9 : 2.5
+        let maxHeight: CGFloat = wide ? 28 : 18
+        return TimelineView(.animation(minimumInterval: 1.0 / 30)) { timeline in
             let t = timeline.date.timeIntervalSinceReferenceDate
-            HStack(alignment: .center, spacing: 2.5) {
+            HStack(alignment: .center, spacing: spacing) {
                 ForEach(0..<LevelMeter.barCount, id: \.self) { i in
                     Capsule()
                         .fill(color)
-                        .frame(width: 3, height: height(i, t: t, thinking: thinking))
+                        .frame(width: barWidth, height: height(i, t: t, thinking: thinking))
                 }
             }
-            .frame(height: 18)
+            .frame(height: maxHeight)
         }
+        .frame(maxWidth: wide ? .infinity : nil)
         .shadow(color: color.opacity(0.5), radius: 4)
     }
 
@@ -249,7 +595,12 @@ struct PillView: View {
         }
         let level = CGFloat(meter.levels[i])
         let shimmer = 0.5 + 0.5 * sin(t * 7 + Double(i) * 1.3)
-        return max(3, 3 + 15 * pow(level, 0.8) + CGFloat(shimmer) * 1.5)
+        // 🐛 Avant le correctif : sans micro ouvert (rendu hors écran, ou juste
+        // après le démarrage), toutes les barres tombaient à `max(3, …)` et la
+        // pastille montrait **treize points alignés** — laid, et l'utilisateur l'aurait
+        // pris pour un bug d'affichage. Le frémissement seul donne maintenant une
+        // vague lisible qui respire, comme sur une vraie écoute au calme.
+        return max(3, 3 + 15 * pow(level, 0.8) + CGFloat(shimmer) * 4)
     }
 }
 
@@ -258,9 +609,43 @@ private struct PillLabelStyle: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {
         HStack(spacing: 6) {
             configuration.icon.foregroundStyle(color)
-            configuration.title.foregroundStyle(.white.opacity(0.92))
+            configuration.title.foregroundStyle(.primary.opacity(0.88))
         }
         .font(.system(size: 12, weight: .medium))
         .fixedSize()
+    }
+}
+
+/// La silhouette complète du style « encoche » : **une seule forme**, la coiffe
+/// étroite en haut et la carte large en bas.
+///
+/// Pourquoi une seule forme et pas deux rectangles empilés : empilés, le filet
+/// clair du haut de la carte dessinait une **couture** visible entre les deux,
+/// et l'ensemble ne ressemblait plus à une encoche mais à deux blocs collés.
+/// Ici il n'y a qu'un contour, donc rien à raccorder.
+struct NotchCardShape: Shape {
+    /// Arrondi du bas de la carte — un arrondi macOS, pas un demi-cercle.
+    var corner: CGFloat = 14
+
+    /// **Une seule silhouette, pleine largeur.**
+    ///
+    /// Version du 04/11 : l'utilisateur a signalé, capture à l'appui, que le
+    /// **décrochement** laissait deux « épaules » visibles dans la barre des
+    /// menus, et que « ça fait bizarre ». La coiffe n'est donc plus plus étroite
+    /// que la carte : le noir est **continu jusqu'au bord supérieur**, sur toute
+    /// la largeur, avec seulement les deux coins du bas arrondis. Ça lit comme
+    /// un panneau qui descend de la barre — plus de marche, plus de vide.
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - corner))
+        p.addQuadCurve(to: CGPoint(x: rect.maxX - corner, y: rect.maxY),
+                       control: CGPoint(x: rect.maxX, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX + corner, y: rect.maxY))
+        p.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.maxY - corner),
+                       control: CGPoint(x: rect.minX, y: rect.maxY))
+        p.closeSubpath()
+        return p
     }
 }

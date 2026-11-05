@@ -59,16 +59,24 @@ final class VocabularyStore: ObservableObject {
         let word = rawWord.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !word.isEmpty else { return }
         let variant = rawVariant?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if let i = items.firstIndex(where: { $0.word.caseInsensitiveCompare(word) == .orderedSame }) {
-            items[i].word = word
+        // ⚠️ **Toujours repasser par une copie.** Muter un élément en place
+        // (`items[i].variants.append(…)`) ne prévient pas toujours SwiftUI :
+        // la liste gardait l'ancien contenu à l'écran jusqu'à ce qu'on rouvre
+        // la page. Constaté le 04/11 (« l'ajout apparaît pas, je dois
+        // fermer et rouvrir »). En réassignant le tableau entier, `@Published`
+        // voit un changement de valeur et redessine **tout de suite**.
+        var updated = items
+        if let i = updated.firstIndex(where: { $0.word.caseInsensitiveCompare(word) == .orderedSame }) {
+            updated[i].word = word
             if !variant.isEmpty, variant.caseInsensitiveCompare(word) != .orderedSame,
-               !items[i].variants.contains(where: { $0.caseInsensitiveCompare(variant) == .orderedSame }) {
-                items[i].variants.append(variant)
+               !updated[i].variants.contains(where: { $0.caseInsensitiveCompare(variant) == .orderedSame }) {
+                updated[i].variants.append(variant)
             }
         } else {
             let variants = (variant.isEmpty || variant.caseInsensitiveCompare(word) == .orderedSame) ? [] : [variant]
-            items.insert(VocabEntry(word: word, variants: variants), at: 0)
+            updated.insert(VocabEntry(word: word, variants: variants), at: 0)
         }
+        items = updated
         save()
     }
 
@@ -81,16 +89,18 @@ final class VocabularyStore: ObservableObject {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty && $0.caseInsensitiveCompare(e.word) != .orderedSame && seen.insert($0.lowercased()).inserted }
         guard !e.word.isEmpty else { return }
-        if let i = items.firstIndex(where: { $0.id == e.id }) {
-            items[i] = e
-        } else if let i = items.firstIndex(where: { $0.word.caseInsensitiveCompare(e.word) == .orderedSame }) {
+        var updated = items
+        if let i = updated.firstIndex(where: { $0.id == e.id }) {
+            updated[i] = e
+        } else if let i = updated.firstIndex(where: { $0.word.caseInsensitiveCompare(e.word) == .orderedSame }) {
             // Le mot existe déjà : on fusionne les formes.
-            for v in e.variants where !items[i].variants.contains(where: { $0.caseInsensitiveCompare(v) == .orderedSame }) {
-                items[i].variants.append(v)
+            for v in e.variants where !updated[i].variants.contains(where: { $0.caseInsensitiveCompare(v) == .orderedSame }) {
+                updated[i].variants.append(v)
             }
         } else {
-            items.insert(e, at: 0)
+            updated.insert(e, at: 0)
         }
+        items = updated
         save()
     }
 
@@ -101,7 +111,7 @@ final class VocabularyStore: ObservableObject {
     }
 
     func remove(_ id: UUID) {
-        items.removeAll { $0.id == id }
+        items = items.filter { $0.id != id }
         save()
     }
 

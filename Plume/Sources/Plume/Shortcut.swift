@@ -1,17 +1,20 @@
 import AppKit
 import CoreGraphics
 
-/// Le raccourci de dictée, choisi dans les réglages. Deux sortes :
+/// Le raccourci de dictée, choisi dans les réglages. Trois sortes :
 ///
 /// - **une touche modificatrice appuyée et relâchée seule** (Option gauche,
 ///   fn par défaut, ⌥ gauche, ⌘ droite…) — ⌥ + une lettre continue de taper les
 ///   caractères spéciaux, rien n'est bloqué ;
 /// - **une combinaison** (⌃⇧W, ⌥Espace, F5…) — elle est **interceptée** : elle
-///   ne fait plus rien dans les autres apps.
+///   ne fait plus rien dans les autres apps ;
+/// - **deux touches modificatrices tenues ensemble** (⌘ gauche + ⌥ gauche) —
+///   le raccourci de la dictée 1337. Il se déclenche **au relâchement de l'une
+///   des deux**, sans touche, et rien n'est avalé (⌘⌥+lettre garde son rôle).
 ///
-/// Gardé dans les UserDefaults (clé `shortcut`, en JSON).
+/// Gardé dans les UserDefaults (clés `shortcut` et `leetShortcut`, en JSON).
 struct Shortcut: Codable, Equatable {
-    enum Kind: String, Codable { case modifier, combo }
+    enum Kind: String, Codable { case modifier, combo, modifierCombo }
 
     var kind: Kind
     /// Code de touche macOS (kVK_…).
@@ -21,14 +24,23 @@ struct Shortcut: Codable, Equatable {
     var modifiers: UInt64
     /// Ce que l'app affiche : « ⌥ gauche », « ⌃⇧W ».
     var display: String
+    /// Deux touches modificatrices tenues ensemble : la seconde. (`nil` pour
+    /// les deux autres sortes — et pour les raccourcis enregistrés avant
+    /// l'arrivée du 1337, que le décodeur sait toujours lire.)
+    var secondKeyCode: Int64? = nil
 
     /// fn par défaut : la touche que la plupart des apps de dictée utilisent.
     static let `default` = Shortcut.modifierKey(63)!
 
     /// Ce que l'app affiche, dans la langue de l'interface (« ⌥ gauche » /
-    /// « Left ⌥ », « ⌃⇧Espace » / « ⌃⇧Space »).
+    /// « Left ⌥ », « ⌃⇧Espace » / « ⌃⇧Space », « ⌘ gauche + ⌥ gauche »).
     var label: String {
         if kind == .modifier { return Self.mods[keyCode]?.name ?? display }
+        if kind == .modifierCombo {
+            let first = Self.mods[keyCode]?.name ?? display
+            guard let second = secondKeyCode.flatMap({ Self.mods[$0] }) else { return first }
+            return "\(first) + \(second.name)"
+        }
         let symbols = (CGEventFlags(rawValue: modifiers).contains(.maskControl) ? "⌃" : "")
             + (CGEventFlags(rawValue: modifiers).contains(.maskAlternate) ? "⌥" : "")
             + (CGEventFlags(rawValue: modifiers).contains(.maskShift) ? "⇧" : "")
@@ -61,6 +73,18 @@ struct Shortcut: Codable, Equatable {
 
     static func isModifierKey(_ code: Int64) -> Bool { mods[code] != nil }
 
+    /// Quelles touches modificatrices (avec leur côté) sont enfoncées, dans
+    /// l'ordre d'affichage ⌘ ⌥ ⌃ ⇧. Sert à l'enregistrement d'un couple :
+    /// `NSEvent.modifierFlags` ne distingue pas gauche et droite, les drapeaux
+    /// CoreGraphics si (bits NX_DEVICE…KEYMASK).
+    static func downModifierKeys(_ flags: CGEventFlags) -> [Int64] {
+        mods.filter { code, info in
+            code != 63 && (code == 63 ? flags.contains(.maskSecondaryFn) : flags.rawValue & info.side != 0)
+        }
+        .sorted { pairOrder($0.value) < pairOrder($1.value) }
+        .map(\.key)
+    }
+
     static func modifierKey(_ code: Int64) -> Shortcut? {
         guard let info = mods[code] else { return nil }
         return Shortcut(kind: .modifier, keyCode: code, modifiers: 0, display: info.name)
@@ -70,8 +94,9 @@ struct Shortcut: Codable, Equatable {
     static let presets: [Shortcut] = [58, 61, 54, 62, 63].compactMap { modifierKey($0) }
 
     /// La touche modificatrice est-elle enfoncée d'après ces drapeaux ?
+    /// (Vaut pour les deux sortes qui reposent sur une touche modificatrice.)
     func isDown(_ flags: CGEventFlags) -> Bool {
-        guard kind == .modifier, let info = Self.mods[keyCode] else { return false }
+        guard kind != .combo, let info = Self.mods[keyCode] else { return false }
         if keyCode == 63 { return flags.contains(.maskSecondaryFn) }
         return flags.rawValue & info.side != 0
     }
@@ -87,6 +112,54 @@ struct Shortcut: Codable, Equatable {
         let sameKindSides = Self.mods.values.filter { $0.general == info.general && $0.side != 0 }.map(\.side)
         let otherSide = sameKindSides.filter { $0 != info.side }.reduce(0, |)
         return flags.rawValue & otherSide != 0
+    }
+
+    // MARK: Deux modificateurs tenus ensemble
+
+    /// ⌘ gauche + ⌥ gauche : le geste par défaut du 1337.
+    static let leetDefault = comboModifiers(55, 58)!
+
+
+    /// Un raccourci « deux modificateurs tenus ensemble ». Refusé (nil) si
+    /// l'une des touches ne s'appuie pas seule (`fn`), si les deux sont la même,
+    /// ou si c'est deux fois le même modificateur (⌘ gauche + ⌘ droite) : on ne
+    /// saurait pas lequel garder appuyé avant de relâcher l'autre.
+    static func comboModifiers(_ first: Int64, _ second: Int64) -> Shortcut? {
+        guard first != 63 && second != 63, first != second,
+              let a = mods[first], let b = mods[second], a.general != b.general else { return nil }
+        // Ordre fixe (⌘, ⌥, ⌃, ⇧) : ⌘⌥ et ⌥⌘ sont le même raccourci, et l'ordre
+        // de frappe ne change ni l'égalité ni ce qui s'affiche.
+        let (x, y) = Self.pairOrder(a) <= Self.pairOrder(b) ? (first, second) : (second, first)
+        let ax = mods[x]!, ay = mods[y]!
+        return Shortcut(kind: .modifierCombo, keyCode: x, modifiers: 0,
+                        display: "\(ax.name) + \(ay.name)", secondKeyCode: y)
+    }
+
+    /// Rangement d'affichage : ⌘, puis ⌥, puis ⌃, puis ⇧.
+    private static func pairOrder(_ m: ModInfo) -> Int {
+        switch m.general {
+        case .maskCommand: return 0
+        case .maskAlternate: return 1
+        case .maskControl: return 2
+        default: return 3
+        }
+    }
+
+    /// Les couples proposés en un clic dans les réglages du 1337.
+    static let pairPresets: [Shortcut] = [(55, 58), (58, 56), (59, 58), (55, 56), (54, 61)]
+        .compactMap { comboModifiers($0.0, $0.1) }
+
+    /// Les deux touches sont-elles enfoncées d'après ces drapeaux ?
+    func bothDown(_ flags: CGEventFlags) -> Bool {
+        guard kind == .modifierCombo, let second = secondKeyCode else { return false }
+        return isDown(flags) && Shortcut(kind: .modifier, keyCode: second, modifiers: 0, display: "").isDown(flags)
+    }
+
+    /// Une touche du couple est-elle enfoncée ?
+    func anyDown(_ flags: CGEventFlags) -> Bool {
+        guard kind == .modifierCombo, let second = secondKeyCode else { return false }
+        let other = Shortcut(kind: .modifier, keyCode: second, modifiers: 0, display: "")
+        return isDown(flags) || other.isDown(flags)
     }
 
     // MARK: Combinaisons
@@ -147,6 +220,9 @@ struct Shortcut: Codable, Equatable {
         case .modifier: return L("Appuyée seule. Avec une autre touche, elle garde son rôle habituel.",
                                  "Pressed on its own. With other keys, it works as usual.")
         case .combo: return L("Réservée à Plume dans toutes les apps.", "Reserved for Plume in every app.")
+        case .modifierCombo: return L(
+            "Tenez les deux touches ensemble, puis relâchez-en une. Avec une autre touche, elles gardent leur rôle habituel.",
+            "Hold both keys together, then release one. With other keys, they work as usual.")
         }
     }
 }

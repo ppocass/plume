@@ -26,6 +26,16 @@ enum PlumeMain {
             dispatchMain()
         }
         if args.contains("--unit-tests") {
+            // 🔴 **Avant tout le reste.** `HistoryStore.shared` est un global
+            // `@MainActor` : le simple fait de démarrer l'application le
+            // construit, et il charge — puis RÉÉCRIT, ramené à 200 — le vrai
+            // historique . Le test « historique illisible » allait
+            // jusqu'à mettre son fichier de côté. Un lancement de tests ne doit
+            // jamais toucher aux données de quelqu'un : on les envoie dans un
+            // dossier temporaire **avant** que quoi que ce soit les lise.
+            let scratch = FileManager.default.temporaryDirectory
+                .appendingPathComponent("plume-tests-\(UUID().uuidString)", isDirectory: true)
+            setenv("PLUME_DATA_DIR", scratch.path, 1)
             MainActor.assumeIsolated { exit(UnitTests.run()) }
         }
         if let i = args.firstIndex(of: "--selftest") {
@@ -97,6 +107,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.onOpenWindow = { MainWindowController.shared.show() }
         hotkey.shortcut = Prefs.shared.shortcut
         hotkey.onTap = { DictationController.shared.handleTap() }
+        // Le second geste (1337) : écouté seulement quand il est activé.
+        hotkey.leetShortcut = Prefs.shared.leetEnabled ? Prefs.shared.leetShortcut : nil
+        hotkey.onLeetTap = { DictationController.shared.handleLeetTap() }
         if !Setup.demo { startHotkey() }
 
         // Les apps Electron n'exposent leurs champs de texte qu'à la demande.
@@ -134,6 +147,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MainWindowController.shared.show(section: section)
             return
         }
+        // Vérification de l'animation, sans micro ni touche :
+        //   Plume --demo-pill <style>   affiche la pastille puis quitte.
+        // ⚠️ **Ici et pas dans `willFinishLaunching`** : le panneau a besoin de
+        // `NSApp` et d'un écran déjà configuré, sinon il ne s'affiche jamais.
+        if let i = CommandLine.arguments.firstIndex(of: "--demo-pill"),
+           CommandLine.arguments.count > i + 1 {
+            let style = PillStyle(rawValue: CommandLine.arguments[i + 1]) ?? .notch
+            prefs.pillStyle = style
+            DictationController.shared.setPhaseForSnapshot(.recording)
+            PillPanel.shared.present()
+            // Entrée → pause → **sortie**, pour vérifier les deux animations.
+            // ⚠️ On passe par `hide()`, **le vrai chemin** — sinon la démo ne
+            // teste pas l'ordre qui compte : remonter d'abord, vider ensuite.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                DictationController.shared.hideForDemo()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4) { NSApp.terminate(nil) }
+            return
+        }
+
         let showedNews = VersionTracker.handleLaunch()
         if !prefs.onboardingDone {
             OnboardingWindowController.shared.show()
