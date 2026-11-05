@@ -169,7 +169,7 @@ final class HistoryStore: ObservableObject {
     }
 
     /// Bascule une dictée entre texte normal et 1337 — le rattrapage demandé
-    /// par Pierre le 05/11 (on s'aperçoit trop tard qu'on voulait du leet).
+    /// par l'utilisateur le 05/11 (on s'aperçoit trop tard qu'on voulait du leet).
     ///
     /// **Réversible**, et sans jamais perdre le texte d'origine :
     /// - aller en 1337 → on maquille **`raw`** (le texte vraiment dit), pas
@@ -178,7 +178,7 @@ final class HistoryStore: ObservableObject {
     ///
     /// ⚠️ Le texte **lissé** n'est donc pas restauré au retour : on revient au
     /// brut. C'est un choix assumé — garder les deux versions demanderait un
-    /// champ de plus dans l'historique, et le brut est justement ce que Pierre
+    /// champ de plus dans l'historique, et le brut est justement ce que l'utilisateur
     /// veut retrouver quand il regrette le 1337.
     func toggleLeet(_ item: Dictation) {
         var d = item

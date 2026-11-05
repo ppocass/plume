@@ -119,7 +119,7 @@ struct OnboardingView: View {
         HStack {
             if model.step == 0 {
                 // « Passer » : tout de suite des réglages qui marchent, sans
-                // parcourir sept écrans. Pierre, 04/11 : « il y a des gens qui
+                // parcourir sept écrans. Constaté le 04/11 : « il y a des gens qui
                 // trouvent ça chiant ».
                 Button(L("Passer", "Skip")) { skip() }
                     .buttonStyle(.plain)
@@ -158,7 +158,7 @@ struct OnboardingView: View {
     /// « Passer » : on applique des réglages par défaut **utilisables tout de
     /// suite**, et on ferme l'assistant.
     ///
-    /// Ce que Pierre a demandé le 04/11 : interface en anglais, détection
+    /// Ce que l'utilisateur a demandé le 04/11 : interface en anglais, détection
     /// automatique de la langue, Parakeet, 35 s avant de rendre la mémoire, la
     /// pastille au centre, apparence claire. Ce sont déjà les défauts de l'app —
     /// on les **écrit explicitement** plutôt que de compter sur eux, parce

@@ -155,7 +155,7 @@ struct VocabEditorSheet: View {
                     // ⚠️ Le vrai malentendu était ici : le libellé précédent
                     // (« Reconnu à tort comme ») faisait croire qu'il fallait
                     // recopier une faute déjà vue. Il faut au contraire écrire
-                    // **comment ça se prononce** — Pierre l'a demandé le
+                    // **comment ça se prononce** — Demandé le
                     // 04/11 : « écrivez plutôt phonétiquement, avec des vraies
                     // lettres ». La correction se fait sur les mots entiers,
                     // l'accent ne casse donc rien.

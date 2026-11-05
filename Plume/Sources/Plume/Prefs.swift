@@ -94,7 +94,7 @@ enum PillTint: String, CaseIterable, Identifiable {
 
 /// Le look de la pastille de dictée.
 ///
-/// Pierre aimait le style d'origine (petit, minimaliste) mais pas son **fond
+/// l'utilisateur aimait le style d'origine (petit, minimaliste) mais pas son **fond
 /// noir opaque** : ça faisait une tache au-dessus de l'interface macOS. Les deux
 /// styles gardent donc la même simplicité et n'échangent que le matériau —
 /// du **verre dépoli** à la place de l'aplat.
@@ -341,7 +341,7 @@ final class Prefs: ObservableObject {
 
     /// L'assistant de premier lancement a été parcouru jusqu'au bout.
     ///
-    /// ⚠️ **Drapeau apprivoisé** (03/11/2026). Pierre voyait l'assistant
+    /// ⚠️ **Drapeau apprivoisé** (03/11/2026). l'utilisateur voyait l'assistant
     /// revenir à chaque redémarrage. Pour qu'il ne puisse plus jamais se
     /// rallumer tout seul, on retient le fait « il a été terminé » dans
     /// **deux endroits** :

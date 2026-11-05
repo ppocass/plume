@@ -12,7 +12,7 @@ enum UnitTests {
     /// Le drapeau de l'assistant : il ne doit jamais se rallumer tout seul.
     ///
     /// On vérifie la logique sur un domaine de préférences à part (jamais celui
-    /// de Pierre), en rejouant les cas qui font revenir l'assistant.
+    /// ), en rejouant les cas qui font revenir l'assistant.
     static func onboardingFlag() {
         let suite = "plume.tests.onboarding.\(UUID().uuidString)"
         guard let d = UserDefaults(suiteName: suite) else {

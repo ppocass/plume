@@ -86,7 +86,7 @@ final class DictationController: ObservableObject {
     /// La dictée en cours sortira-t-elle en 1337 ?
     ///
     /// `@Published` **pour que la pastille le montre tout de suite** : à l'instant
-    /// où Pierre fait ⌘+⌥ en cours de dictée, il doit voir que c'est pris en
+    /// où l'on fait ⌘+⌥ en cours de dictée, il doit voir que c'est pris en
     /// compte, pas le découvrir au résultat.
     @Published private(set) var isLeetRun = false
 
@@ -97,7 +97,7 @@ final class DictationController: ObservableObject {
     ///
     /// Permet de rendre la **vraie** `PillView` hors écran, au lieu d'en
     /// recopier le dessin : une copie dérive tôt ou tard du vrai code, et on
-    /// montre alors à Pierre un rendu qui ne ressemble à rien de ce qu'il verra.
+    /// montre alors un rendu qui ne ressemble à rien de ce qu'il verra.
     /// Ne fait rien d'autre : le panneau n'est pas affiché, le micro pas ouvert.
     func setPhaseForSnapshot(_ phase: PillPhase) {
         self.phase = phase
@@ -114,7 +114,7 @@ final class DictationController: ObservableObject {
     /// Le raccourci 1337 (⌘ gauche + ⌥ gauche).
     ///
     /// **Il ne sert plus à *démarrer* en 1337 — il sert à *terminer* en 1337.**
-    /// Décision de Pierre, 05/11 : le style se choisit **à la fin**, avec le
+    /// Décision de conception, 05/11 : le style se choisit **à la fin**, avec le
     /// geste qu'on veut. On dicte toujours avec le geste normal (⌥), et c'est
     /// le geste de **fin** qui décide :
     /// - ⌥ seul → texte normal ;
@@ -489,7 +489,7 @@ final class DictationController: ObservableObject {
         hideTask = nil
         // 🔴 **L'ordre compte.** Mettre `phase = .hidden` d'abord fait que la
         // vue retire son contenu **immédiatement** : on voit (ou plutôt on ne
-        // voit plus) une fenêtre vide pendant que la fenêtre remonte. Pierre
+        // voit plus) une fenêtre vide pendant que la fenêtre remonte. l'utilisateur
         // l'a dit exactement comme ça : « à la place de remonter, elle
         // disparaît juste ».
         //

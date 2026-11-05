@@ -67,7 +67,7 @@ final class PillPanel: NSPanel {
     private var pillStyle: PillStyle { Prefs.shared.pillStyle }
     private var hasNotch: Bool { NSScreen.main?.auxiliaryTopLeftArea != nil }
 
-    /// L'écran où se trouve la souris (là où Pierre travaille).
+    /// L'écran où se trouve la souris (là où l'utilisateur travaille).
     /// (Nommée `workScreen` : `screen` est déjà une propriété de `NSWindow`.)
     private var workScreen: NSScreen? {
         let mouse = NSEvent.mouseLocation
@@ -77,20 +77,20 @@ final class PillPanel: NSPanel {
     /// La taille de la fenêtre pour une phase donnée.
     ///
     /// En style « encoche », la **carte est plus étroite** que la pastille
-    /// d'origine (300 au lieu de 320) : la maquette qui a plu à Pierre était
+    /// d'origine (300 au lieu de 320) : la maquette qui a plu  était
     /// compacte, et une carte large ne « sort » pas crédiblement d'une encoche.
     /// Le pop-up garde sa largeur (il doit pouvoir montrer une ligne de texte).
     /// Marge horizontale laissée à l'ombre de la carte, de chaque côté.
     ///
     /// La fenêtre est **plus large que la carte** : sans cette marge, l'ombre
     /// se fait couper par le bord de la fenêtre et dessine un rectangle à
-    /// angles droits (le défaut signalé par Pierre le 04/11).
+    /// angles droits (le défaut signalé par l'utilisateur le 04/11).
     static let shadowMargin: CGFloat = 26
     /// Marge verticale : l'ombre descend sous la carte.
     static let shadowMarginBottom: CGFloat = 26
 
     private func panelSize(for phase: PillPhase) -> NSSize {
-        // Largeurs : 276 pour l'encoche (un peu plus étroite, demande de Pierre),
+        // Largeurs : 276 pour l'encoche (un peu plus étroite, demande ),
         // la taille d'origine pour les autres. Le pop-up garde de quoi lire.
         let card: NSSize = phase.showsPreview
             ? Self.previewSize
@@ -131,7 +131,7 @@ final class PillPanel: NSPanel {
     ///
     /// Pendant une dictée, le panneau est visible : on le remet en place tout
     /// de suite, sinon il resterait à l'ancien emplacement jusqu'au prochain
-    /// affichage et Pierre croirait que le réglage n'a rien fait.
+    /// affichage et l'utilisateur croirait que le réglage n'a rien fait.
     func styleChanged() {
         guard isVisible else { return }
         let target = panelSize(for: DictationController.shared.phase)
@@ -175,7 +175,7 @@ final class PillPanel: NSPanel {
     /// glisse en 0,42 s : assez pour qu'on voie d'où elle vient, assez court
     /// pour ne pas faire attendre pendant une dictée.
     private func slideIn(to goal: NSRect) {
-        // ⚠️ **Un vrai glissement, pas un fondu.** Pierre l'a dit le 04/11 :
+        // ⚠️ **Un vrai glissement, pas un fondu.** Constaté le 04/11 :
         // « tu m'as fait une animation d'apparition, moi je voulais un truc qui
         // glisse depuis le haut ». La carte part donc **entièrement hors de
         // l'écran**, au-dessus du bord, et descend. Elle est **opaque dès le
@@ -303,7 +303,7 @@ struct PillView: View {
     ///
     /// ⚠️ On lit `@Environment(\.colorScheme)`, **pas** `NSApp.effectiveAppearance` :
     /// le panneau a sa propre apparence (posée par `PillPanel`), donc SwiftUI
-    /// sait exactement ce que Pierre voit, et il se met à jour quand le système
+    /// sait exactement ce que l'utilisateur voit, et il se met à jour quand le système
     /// change si l'app est en mode « Système ».
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
@@ -339,7 +339,7 @@ struct PillView: View {
                 // mais la vue jouait **en plus** un fondu d'opacité. Les deux
                 // se superposaient, et comme le fondu part de transparent, on
                 // ne voyait qu'une apparition — la position changeait sans que
-                // l'œil puisse la suivre. Pierre l'a signalé trois fois.
+                // l'œil puisse la suivre. Signalé plusieurs fois.
                 // Le glissement est fait par la **fenêtre** (`slideIn`), donc
                 // la vue n'a plus rien à animer en entrée.
                 .transition(hangsFromTop
@@ -348,7 +348,7 @@ struct PillView: View {
                 // Marge de chaque côté : l'ombre de la carte a besoin de place
                 // pour s'étaler. Sans elle, le bord de la fenêtre la **coupe
                 // net** — et on voit un rectangle sombre à angles droits autour
-                // de la carte, ce que Pierre a entouré en rouge.
+                // de la carte, ce que l'utilisateur a entouré en rouge.
                 .padding(.horizontal, 26)
                 .padding(hangsFromTop ? .top : .bottom, hangsFromTop ? topInset : 6)
                 .padding(.bottom, hangsFromTop ? 26 : 0)
@@ -362,7 +362,7 @@ struct PillView: View {
     /// même filet et la même ombre que le reste de l'app.
     private struct NotchCardBackground: View {
         var body: some View {
-            // ⚠️ **Plus aucun contour, plus aucune ombre.** Pierre, le
+            // ⚠️ **Plus aucun contour, plus aucune ombre.** l'utilisateur, le
             // 04/11 : « le contour gris est encore pire ». Le filet clair et
             // l'ombre portée, sur un panneau collé au bord de l'écran, se
             // lisaient comme un liseré gris sale. Un aplat franc suffit — la
@@ -508,7 +508,7 @@ struct PillView: View {
             // ⚠️ **Le voile doit suivre le thème.** Il était figé en blanc à
             // 30 % : la pastille restait claire même en mode sombre, et
             // paraissait « super clair » sur une interface noire (remarque de
-            // Pierre, 05/11). En sombre, on assombrit ; le matériau du système,
+            // l'utilisateur, 05/11). En sombre, on assombrit ; le matériau du système,
             // lui, s'adapte déjà tout seul.
             shape
                 .fill(.ultraThinMaterial)
@@ -564,7 +564,7 @@ struct PillView: View {
     private func bars(color: Color, thinking: Bool) -> some View {
         // En style « encoche », la carte est large : des barres de 3 pt collées
         // au milieu donnent l'impression d'un petit objet perdu dans un grand
-        // vide (remarque de Pierre). On les **étire** pour qu'elles occupent la
+        // vide (remarque ). On les **étire** pour qu'elles occupent la
         // largeur, comme un vrai niveau audio.
         let wide = style == .notch
         let barWidth: CGFloat = wide ? 7 : 3
@@ -597,7 +597,7 @@ struct PillView: View {
         let shimmer = 0.5 + 0.5 * sin(t * 7 + Double(i) * 1.3)
         // 🐛 Avant le correctif : sans micro ouvert (rendu hors écran, ou juste
         // après le démarrage), toutes les barres tombaient à `max(3, …)` et la
-        // pastille montrait **treize points alignés** — laid, et Pierre l'aurait
+        // pastille montrait **treize points alignés** — laid, et l'utilisateur l'aurait
         // pris pour un bug d'affichage. Le frémissement seul donne maintenant une
         // vague lisible qui respire, comme sur une vraie écoute au calme.
         return max(3, 3 + 15 * pow(level, 0.8) + CGFloat(shimmer) * 4)
@@ -629,7 +629,7 @@ struct NotchCardShape: Shape {
 
     /// **Une seule silhouette, pleine largeur.**
     ///
-    /// Version du 04/11 : Pierre a signalé, capture à l'appui, que le
+    /// Version du 04/11 : l'utilisateur a signalé, capture à l'appui, que le
     /// **décrochement** laissait deux « épaules » visibles dans la barre des
     /// menus, et que « ça fait bizarre ». La coiffe n'est donc plus plus étroite
     /// que la carte : le noir est **continu jusqu'au bord supérieur**, sur toute

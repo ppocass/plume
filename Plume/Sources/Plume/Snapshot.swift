@@ -55,7 +55,7 @@ enum Snapshot {
     /// sans toucher au vrai panneau ni aux réglages.
     ///
     /// On dessine directement `PillView`, dans les tailles réelles du panneau,
-    /// en clair et en sombre. C'est ce que Pierre voit à l'écran.
+    /// en clair et en sombre. C'est ce que l'utilisateur voit à l'écran.
     static func pills(into out: URL) {
         let savedPhase = DictationController.shared.phase
         let savedStyle = Prefs.shared.pillStyle
@@ -76,7 +76,7 @@ enum Snapshot {
                 let appearance = NSAppearance(named: dark ? .darkAqua : .aqua)!
                 let suffix = "\(style.rawValue)-\(dark ? "sombre" : "clair")"
 
-                // La **vraie** vue : ce que Pierre verra, pas une copie.
+                // La **vraie** vue : ce que l'utilisateur verra, pas une copie.
                 let view = PillView()
                     .environmentObject(DictationController.shared)
                     .environmentObject(DictationController.shared.meter)

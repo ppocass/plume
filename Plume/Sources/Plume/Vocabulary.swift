@@ -62,7 +62,7 @@ final class VocabularyStore: ObservableObject {
         // ⚠️ **Toujours repasser par une copie.** Muter un élément en place
         // (`items[i].variants.append(…)`) ne prévient pas toujours SwiftUI :
         // la liste gardait l'ancien contenu à l'écran jusqu'à ce qu'on rouvre
-        // la page. Pierre l'a vu le 04/11 (« l'ajout apparaît pas, je dois
+        // la page. Constaté le 04/11 (« l'ajout apparaît pas, je dois
         // fermer et rouvrir »). En réassignant le tableau entier, `@Published`
         // voit un changement de valeur et redessine **tout de suite**.
         var updated = items

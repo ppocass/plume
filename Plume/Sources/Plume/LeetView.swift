@@ -102,7 +102,7 @@ private struct LevelRow: View {
 /// Le transformateur : une zone où coller du texte, et dessous le résultat en
 /// 1337 au niveau choisi dans l'onglet.
 ///
-/// Demandé par Pierre le 05/11 : « un endroit vide où tu peux y coller ton
+/// Demandé le 05/11 : « un endroit vide où tu peux y coller ton
 /// texte, ça fait transcrire, et en bas tu as ton texte en 1337, tu as juste à
 /// faire copier ». **Volontairement dans l'app et pas en raccourci global** —
 /// il ne voulait pas d'une touche système pour ça.
@@ -123,7 +123,7 @@ private struct LeetTransformer: View {
             // ⚠️ **Un vrai NSTextView, pas le `TextEditor` de SwiftUI.** Ce
             // dernier garde des marges internes qu'on ne peut pas régler : le
             // curseur apparaissait collé au coin haut-gauche, à côté du texte
-            // d'invite, et rien ne s'alignait (signalé par Pierre le 05/11).
+            // d'invite, et rien ne s'alignait (constaté le 05/11).
             // Ici on choisit `textContainerInset`, donc le curseur et l'invite
             // partagent exactement la même origine.
             PlaceholderTextView(text: $input,
@@ -181,7 +181,7 @@ private struct LeetTransformer: View {
 /// Un champ de texte multiligne **dont on maîtrise les marges**.
 ///
 /// SwiftUI n'expose pas `textContainerInset` : le curseur et le texte d'invite
-/// ne pouvaient pas s'aligner (signalé par Pierre le 05/11 — curseur collé au
+/// ne pouvaient pas s'aligner (constaté le 05/11 — curseur collé au
 /// coin, invite à côté). On passe donc par AppKit et on pose **une seule marge**,
 /// utilisée à la fois par le texte et par l'invite : elles coïncident au pixel.
 ///
@@ -258,7 +258,7 @@ struct PlaceholderTextView: NSViewRepresentable {
         /// ont un repère **retourné** (`isFlipped == true`), donc l'origine est
         /// en **haut** et non en bas. En raisonnant « depuis le bas » je
         /// retournais le décalage, et l'invite se retrouvait du mauvais côté du
-        /// curseur — Pierre a littéralement vu « ils ont échangé de place ».
+        /// curseur — l'utilisateur a littéralement vu « ils ont échangé de place ».
         ///
         /// La géométrie juste : le texte est dessiné à partir de
         /// `textContainerOrigin`, sur `lineHeight` de haut. Le label doit donc
