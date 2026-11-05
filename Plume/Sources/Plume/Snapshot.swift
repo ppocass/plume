@@ -30,6 +30,10 @@ enum Snapshot {
         for lang in AppLanguage.allCases {
             d.set(lang.rawValue, forKey: "appLanguage")
             for dark in [false, true] {
+                // Le thème passe par Prefs **et** par l'apparence de la fenêtre :
+                // `PillView` lit `@Environment(\.colorScheme)`, qui dépend de
+                // l'apparence de la fenêtre de rendu.
+                Prefs.shared.appearance = dark ? .dark : .light
                 let appearance = NSAppearance(named: dark ? .darkAqua : .aqua)!
                 let suffix = "\(lang.rawValue)-\(dark ? "sombre" : "clair")"
                 let model = OnboardingModel()
@@ -55,14 +59,20 @@ enum Snapshot {
     static func pills(into out: URL) {
         let savedPhase = DictationController.shared.phase
         let savedStyle = Prefs.shared.pillStyle
+        let savedAppearance = Prefs.shared.appearance
         defer {
             Prefs.shared.pillStyle = savedStyle
+            Prefs.shared.appearance = savedAppearance
             DictationController.shared.setPhaseForSnapshot(savedPhase)
         }
 
         for style in PillStyle.allCases {
             for dark in [false, true] {
                 Prefs.shared.pillStyle = style
+                // Le thème passe par Prefs **et** par l'apparence de la fenêtre :
+                // `PillView` lit `@Environment(\.colorScheme)`, qui dépend de
+                // l'apparence de la fenêtre de rendu.
+                Prefs.shared.appearance = dark ? .dark : .light
                 let appearance = NSAppearance(named: dark ? .darkAqua : .aqua)!
                 let suffix = "\(style.rawValue)-\(dark ? "sombre" : "clair")"
 

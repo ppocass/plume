@@ -147,6 +147,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MainWindowController.shared.show(section: section)
             return
         }
+        // Vérification de l'animation, sans micro ni touche :
+        //   Plume --demo-pill <style>   affiche la pastille puis quitte.
+        // ⚠️ **Ici et pas dans `willFinishLaunching`** : le panneau a besoin de
+        // `NSApp` et d'un écran déjà configuré, sinon il ne s'affiche jamais.
+        if let i = CommandLine.arguments.firstIndex(of: "--demo-pill"),
+           CommandLine.arguments.count > i + 1 {
+            let style = PillStyle(rawValue: CommandLine.arguments[i + 1]) ?? .notch
+            prefs.pillStyle = style
+            DictationController.shared.setPhaseForSnapshot(.recording)
+            PillPanel.shared.present()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4) { NSApp.terminate(nil) }
+            return
+        }
+
         let showedNews = VersionTracker.handleLaunch()
         if !prefs.onboardingDone {
             OnboardingWindowController.shared.show()

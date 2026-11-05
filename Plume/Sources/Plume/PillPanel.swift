@@ -143,6 +143,10 @@ final class PillPanel: NSPanel {
     }
 
     func present() {
+        // 🔴 **La pastille suit l'apparence de l'app, pas celle du système.**
+        // Le panneau flottant n'hérite pas de `NSApp.appearance` : sans cette
+        // ligne, il restait clair même quand Plume était en sombre, et inversement.
+        appearance = NSApp.appearance
         // La fenêtre prend la taille de ce que montre la pastille à cet instant.
         let target = panelSize(for: DictationController.shared.phase)
         let goal = targetFrame(size: target)
@@ -175,8 +179,7 @@ final class PillPanel: NSPanel {
         // « tu m'as fait une animation d'apparition, moi je voulais un truc qui
         // glisse depuis le haut ». La carte part donc **entièrement hors de
         // l'écran**, au-dessus du bord, et descend. Elle est **opaque dès le
-        // premier pixel** (alpha = 1) : c'est la position qui fait tout, et
-        // aucun fondu ne vient adoucir le mouvement.
+        // premier pixel** : c'est la position qui fait tout.
         var start = goal
         start.origin.y = goal.maxY + 4        // juste au-dessus du bord supérieur
         setFrame(start, display: false)
@@ -184,15 +187,46 @@ final class PillPanel: NSPanel {
         slidingIn = true
         orderFrontRegardless()
 
-        NSAnimationContext.runAnimationGroup { context in
-            // 0,34 s : le temps de voir le mouvement sans faire attendre
-            // quelqu'un qui vient de parler. Décélération franche en fin de
-            // course (`easeOut`), comme un panneau qui se pose.
-            context.duration = 0.34
-            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.16, 0.84, 0.24, 1.0)
-            animator().setFrame(goal, display: true)
-        } completionHandler: { [weak self] in
-            self?.slidingIn = false
+        Log.info(String(format: "glissement : départ y=%.0f → arrivée y=%.0f (course %.0f pt)",
+                        start.origin.y, goal.origin.y, start.origin.y - goal.origin.y))
+
+        // 🔴 **`NSAnimationContext` + `animator()` NE MARCHE PAS ici**, et c'était
+        // la vraie cause du problème depuis le début. Mesuré le 05/11 : la
+        // fenêtre passait de y=904 à y=810 **entre deux images**, sans aucune
+        // position intermédiaire — un saut, pas un glissement. Un `NSPanel`
+        // sans bordure n'anime pas son cadre par ce chemin, et le fondu de la
+        // vue finissait par masquer le tout.
+        //
+        // On fait donc l'animation **nous-mêmes**, à 60 images par seconde, avec
+        // une décélération cubique. C'est plus de code, mais c'est le seul
+        // moyen d'être certain que ça bouge — et c'est vérifiable.
+        animateFrame(from: start, to: goal, duration: 0.34)
+    }
+
+    private var animationTimer: Timer?
+
+    /// Déplace la fenêtre image par image. `easeOut` cubique : départ rapide,
+    /// arrivée qui se pose.
+    private func animateFrame(from: NSRect, to: NSRect, duration: Double) {
+        animationTimer?.invalidate()
+        let startTime = ProcessInfo.processInfo.systemUptime
+        let step = 1.0 / 60.0
+
+        animationTimer = Timer.scheduledTimer(withTimeInterval: step, repeats: true) { [weak self] timer in
+            guard let self else { timer.invalidate(); return }
+            let elapsed = ProcessInfo.processInfo.systemUptime - startTime
+            let t = min(1, elapsed / duration)
+            let eased = 1 - pow(1 - t, 3)          // easeOut cubique
+            let y = from.origin.y + (to.origin.y - from.origin.y) * CGFloat(eased)
+            self.setFrameOrigin(NSPoint(x: to.origin.x, y: y))
+            if t >= 1 {
+                timer.invalidate()
+                self.animationTimer = nil
+                self.setFrame(to, display: true)
+                self.slidingIn = false
+                Log.info(String(format: "glissement : arrivé y=%.0f en %.2fs",
+                                self.frame.origin.y, duration))
+            }
         }
     }
 
@@ -203,11 +237,26 @@ final class PillPanel: NSPanel {
         guard isVisible else { completion(); return }
         var out = frame
         out.origin.y = frame.maxY + 4
-        NSAnimationContext.runAnimationGroup({ context in
-            context.duration = 0.22
-            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
-            animator().setFrame(out, display: true)
-        }, completionHandler: completion)
+        animateFrameOut(from: frame, to: out, duration: 0.22, completion: completion)
+    }
+
+    private func animateFrameOut(from: NSRect, to: NSRect, duration: Double,
+                                 completion: @escaping () -> Void) {
+        animationTimer?.invalidate()
+        let startTime = ProcessInfo.processInfo.systemUptime
+        animationTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0, repeats: true) { [weak self] timer in
+            guard let self else { timer.invalidate(); return }
+            let elapsed = ProcessInfo.processInfo.systemUptime - startTime
+            let t = min(1, elapsed / duration)
+            let eased = t * t                     // easeIn : il s'arrache
+            let y = from.origin.y + (to.origin.y - from.origin.y) * CGFloat(eased)
+            self.setFrameOrigin(NSPoint(x: to.origin.x, y: y))
+            if t >= 1 {
+                timer.invalidate()
+                self.animationTimer = nil
+                completion()
+            }
+        }
     }
 
     func dismiss() {
@@ -242,6 +291,15 @@ struct PillView: View {
     private var style: PillStyle { Prefs.shared.pillStyle }
     private var hangsFromTop: Bool { style.hangsFromTop }
 
+    /// La pastille suit-elle le thème **sombre** ?
+    ///
+    /// ⚠️ On lit `@Environment(\.colorScheme)`, **pas** `NSApp.effectiveAppearance` :
+    /// le panneau a sa propre apparence (posée par `PillPanel`), donc SwiftUI
+    /// sait exactement ce que Pierre voit, et il se met à jour quand le système
+    /// change si l'app est en mode « Système ».
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+
     /// L'espace entre le bord supérieur de l'écran et le haut de la pastille.
     ///
     /// - style « en haut » : la barre des menus (37 pt) + 6 pt, pour que la
@@ -267,8 +325,17 @@ struct PillView: View {
                     }
                 }
                 .frame(width: style == .notch ? 276 : nil)
+                // 🔴 **Aucune transition pour les styles du haut.**
+                //
+                // C'est CE qui tuait l'animation : la fenêtre glissait bien,
+                // mais la vue jouait **en plus** un fondu d'opacité. Les deux
+                // se superposaient, et comme le fondu part de transparent, on
+                // ne voyait qu'une apparition — la position changeait sans que
+                // l'œil puisse la suivre. Pierre l'a signalé trois fois.
+                // Le glissement est fait par la **fenêtre** (`slideIn`), donc
+                // la vue n'a plus rien à animer en entrée.
                 .transition(hangsFromTop
-                    ? .opacity
+                    ? .identity
                     : .scale(scale: 0.6, anchor: .bottom).combined(with: .opacity))
                 // Marge de chaque côté : l'ombre de la carte a besoin de place
                 // pour s'étaler. Sans elle, le bord de la fenêtre la **coupe
@@ -430,12 +497,17 @@ struct PillView: View {
                 .overlay(shape.stroke(Color.white.opacity(0.13), lineWidth: 0.75))
                 .shadow(color: .black.opacity(0.50), radius: 20, y: 9)
         } else {
+            // ⚠️ **Le voile doit suivre le thème.** Il était figé en blanc à
+            // 30 % : la pastille restait claire même en mode sombre, et
+            // paraissait « super clair » sur une interface noire (remarque de
+            // Pierre, 05/11). En sombre, on assombrit ; le matériau du système,
+            // lui, s'adapte déjà tout seul.
             shape
                 .fill(.ultraThinMaterial)
-                .overlay(shape.fill(Color.white.opacity(0.30)))
-                .overlay(shape.stroke(Color.white.opacity(0.55), lineWidth: 0.75))
-                .overlay(shape.stroke(Color.black.opacity(0.10), lineWidth: 0.5).padding(0.5))
-                .shadow(color: .black.opacity(0.22), radius: 14, y: 5)
+                .overlay(shape.fill(isDark ? Color.black.opacity(0.34) : Color.white.opacity(0.30)))
+                .overlay(shape.stroke(Color.white.opacity(isDark ? 0.20 : 0.55), lineWidth: 0.75))
+                .overlay(shape.stroke(Color.black.opacity(isDark ? 0.28 : 0.10), lineWidth: 0.5).padding(0.5))
+                .shadow(color: .black.opacity(isDark ? 0.42 : 0.22), radius: 14, y: 5)
                 .shadow(color: .black.opacity(0.10), radius: 2, y: 1)
         }
     }
@@ -462,6 +534,9 @@ struct PillView: View {
 
     /// La couleur du texte de la pastille : sombre sur le verre clair, clair
     /// sur la carte sombre du style « encoche ».
+    /// Sombre sur le verre clair, clair sur le verre sombre et sur la carte
+    /// d'encoche. En mode sombre, `.primary` est déjà clair — on ne force donc
+    /// le blanc que pour l'encoche, qui a son propre fond noir.
     private var pillText: Color { style == .notch ? .white : .primary }
 
     private var cancelButton: some View {
