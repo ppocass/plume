@@ -168,6 +168,32 @@ final class HistoryStore: ObservableObject {
         saveTotals()
     }
 
+    /// Bascule une dictée entre texte normal et 1337 — le rattrapage demandé
+    /// par Pierre le 05/11 (on s'aperçoit trop tard qu'on voulait du leet).
+    ///
+    /// **Réversible**, et sans jamais perdre le texte d'origine :
+    /// - aller en 1337 → on maquille **`raw`** (le texte vraiment dit), pas
+    ///   `text` (qui pourrait déjà être maquillé) ;
+    /// - revenir → on remet `raw` tel quel.
+    ///
+    /// ⚠️ Le texte **lissé** n'est donc pas restauré au retour : on revient au
+    /// brut. C'est un choix assumé — garder les deux versions demanderait un
+    /// champ de plus dans l'historique, et le brut est justement ce que Pierre
+    /// veut retrouver quand il regrette le 1337.
+    func toggleLeet(_ item: Dictation) {
+        var d = item
+        guard !d.raw.isEmpty else { return }
+        if d.leet {
+            d.text = d.raw
+            d.leet = false
+        } else {
+            d.text = Leet.transform(d.raw, level: Prefs.shared.leetLevel)
+            d.leet = true
+        }
+        replace(d)
+        Log.info("historique : dictée basculée en \(d.leet ? "1337" : "texte normal")")
+    }
+
     func replace(_ d: Dictation) {
         guard let i = items.firstIndex(where: { $0.id == d.id }) else { return }
         // Une dictée ratée qui réussit au 2ᵉ essai compte à ce moment-là.

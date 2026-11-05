@@ -170,6 +170,13 @@ struct HistoryRow: View {
                 }
                 Divider()
                 Button(L("Corriger un mot…", "Fix a Word…")) { correcting = true }
+                // Le rattrapage, demandé par Pierre le 05/11 : transformer
+                // après coup un texte déjà dicté, même plusieurs jours après.
+                // Le texte d'origine reste dans `raw`, donc c'est réversible.
+                Button(item.leet ? L("Remettre en texte normal", "Back to Normal Text")
+                     : L("Réécrire en 1337", "Rewrite as 1337")) {
+                    history.toggleLeet(item)
+                }
                 Divider()
             }
             Button(L("Supprimer", "Delete"), role: .destructive) { history.remove(item.id) }

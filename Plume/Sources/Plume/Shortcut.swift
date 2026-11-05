@@ -119,6 +119,7 @@ struct Shortcut: Codable, Equatable {
     /// ⌘ gauche + ⌥ gauche : le geste par défaut du 1337.
     static let leetDefault = comboModifiers(55, 58)!
 
+
     /// Un raccourci « deux modificateurs tenus ensemble ». Refusé (nil) si
     /// l'une des touches ne s'appuie pas seule (`fn`), si les deux sont la même,
     /// ou si c'est deux fois le même modificateur (⌘ gauche + ⌘ droite) : on ne

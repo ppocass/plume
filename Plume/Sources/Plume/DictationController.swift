@@ -83,7 +83,12 @@ final class DictationController: ObservableObject {
     private var live: LiveTranscriber?
     /// La dictée en cours est-elle la dictée 1337 ? Décidé au départ, gardé
     /// jusqu'au traitement : c'est ce qui décide de maquiller le texte.
-    private var isLeetRun = false
+    /// La dictée en cours sortira-t-elle en 1337 ?
+    ///
+    /// `@Published` **pour que la pastille le montre tout de suite** : à l'instant
+    /// où Pierre fait ⌘+⌥ en cours de dictée, il doit voir que c'est pris en
+    /// compte, pas le découvrir au résultat.
+    @Published private(set) var isLeetRun = false
 
     /// Une fenêtre (Réglages) demande à s'ouvrir.
     var onOpenWindow: (() -> Void)?
@@ -106,16 +111,24 @@ final class DictationController: ObservableObject {
 
     // MARK: Gestes
 
-    /// Le raccourci 1337 (⌘ gauche + ⌥ gauche) : même geste que la dictée, mais
-    /// le texte final est maquillé. Si la dictée 1337 n'est pas activée, on ne
-    /// fait rien (le couple reste simplement ⌘⌥ pour les autres apps).
+    /// Le raccourci 1337 (⌘ gauche + ⌥ gauche).
+    ///
+    /// **Il ne sert plus à *démarrer* en 1337 — il sert à *terminer* en 1337.**
+    /// Décision de Pierre, 05/11 : le style se choisit **à la fin**, avec le
+    /// geste qu'on veut. On dicte toujours avec le geste normal (⌥), et c'est
+    /// le geste de **fin** qui décide :
+    /// - ⌥ seul → texte normal ;
+    /// - ⌘+⌥ → le texte de cette dictée part en 1337.
+    ///
+    /// Pourquoi c'est mieux : on ne sait pas toujours, au moment d'appuyer,
+    /// si on va vouloir du 1337. Le dire à la fin évite de tout recommencer.
     func handleLeetTap() {
         guard Prefs.shared.leetEnabled else { return }
         handleTap(leet: true)
     }
 
-    /// `leet` : le geste vient du raccourci 1337. Il ne compte qu'au **départ**
-    /// (une dictée 1337 se termine avec le geste normal).
+    /// `leet` : le geste vient du raccourci 1337. **Au départ il est ignoré**
+    /// (on dicte toujours pareil) ; **à la fin il choisit le style**.
     func handleTap(leet: Bool = false) {
         if isProcessing {
             // Pendant le traitement, un appui ne fait rien (la dictée en cours
@@ -140,6 +153,8 @@ final class DictationController: ObservableObject {
             return
         }
         if isRecording {
+            // La fin décide du style, quel que soit le geste de départ.
+            if leet { isLeetRun = true }
             if let pendingStop {
                 // Deuxième appui rapide : annuler.
                 pendingStop.cancel()
@@ -154,8 +169,18 @@ final class DictationController: ObservableObject {
                 }
             }
         } else {
-            start(leet: leet)
+            // Au départ, le geste 1337 compte comme un geste normal : le style
+            // se choisira à la fin. On ne démarre donc jamais « en 1337 ».
+            start(leet: false)
         }
+    }
+
+    /// Un message bref dans la pastille, sans dictée.
+    ///
+    /// Sert au transformateur de sélection : il n'a pas d'audio à montrer, mais
+    /// il doit dire ce qui vient de se passer (ou pourquoi il n'a rien fait).
+    func flash(_ message: String) {
+        show(.message(message, isError: false), for: 1.6)
     }
 
     /// La croix rouge de la pastille.
@@ -178,7 +203,7 @@ final class DictationController: ObservableObject {
     private var isRecording: Bool { recorder.isRunning || fakeRecording }
 
     private func start(leet: Bool = false) {
-        isLeetRun = leet && Prefs.shared.leetEnabled
+        isLeetRun = false   // le style se choisit à la fin
         if fakeAudio != nil {
             fakeRecording = true
             recordingStartedAt = Date()
