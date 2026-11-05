@@ -157,6 +157,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             prefs.pillStyle = style
             DictationController.shared.setPhaseForSnapshot(.recording)
             PillPanel.shared.present()
+            // Entrée → pause → **sortie**, pour vérifier les deux animations.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                DictationController.shared.setPhaseForSnapshot(.hidden)
+                PillPanel.shared.dismiss()
+            }
             DispatchQueue.main.asyncAfter(deadline: .now() + 4) { NSApp.terminate(nil) }
             return
         }

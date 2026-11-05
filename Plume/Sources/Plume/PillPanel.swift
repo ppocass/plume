@@ -235,8 +235,11 @@ final class PillPanel: NSPanel {
     /// donnait l'impression qu'elle s'évaporait.
     func slideOut(completion: @escaping () -> Void = {}) {
         guard isVisible else { completion(); return }
+        // ⚠️ Il faut aller **complètement** au-dessus de l'écran : `frame.maxY`
+        // de la fenêtre elle-même ne suffit pas, sinon la carte s'arrête encore
+        // visible en haut et la disparition paraît brutalement coupée.
         var out = frame
-        out.origin.y = frame.maxY + 4
+        out.origin.y = (screen?.frame.maxY ?? frame.maxY) + 10
         animateFrameOut(from: frame, to: out, duration: 0.22, completion: completion)
     }
 
@@ -260,16 +263,13 @@ final class PillPanel: NSPanel {
     }
 
     func dismiss() {
-        // On laisse à la vue le temps de jouer sa transition, puis on retire.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-            guard let self, DictationController.shared.phase == .hidden else { return }
-            if self.pillStyle.hangsFromTop {
-                // Du haut : la carte remonte hors de l'écran, comme elle est venue.
-                self.slideOut { self.orderOut(nil) }
-            } else {
-                self.orderOut(nil)
-            }
-        }
+        // ⚠️ **Plus de délai.** Il existait pour laisser jouer une transition de
+        // vue qui n'existe plus (les styles du haut n'en ont plus). Il ne
+        // faisait donc que retarder la sortie de 0,25 s — assez pour que la
+        // disparition paraisse sèche, et Pierre l'a vu.
+        guard pillStyle.hangsFromTop else { orderOut(nil); return }
+        // Du haut : la carte **remonte** hors de l'écran, comme elle est venue.
+        slideOut { [weak self] in self?.orderOut(nil) }
     }
 }
 
