@@ -33,6 +33,23 @@ Dites « à la ligne », « nouveau paragraphe », « ouvrez la parenthèse … 
 
 Le raccourci se change dans les Réglages, n'importe quelle touche convient. Avec fn, réglez Réglages Système > Clavier > « Appuyer sur la touche 🌐 » sur « Ne rien faire », sinon macOS ouvre aussi les emojis.
 
+### Dictée 1337
+
+Avec un second raccourci (⌘ + ⌥ par défaut), vous décidez **comment la phrase se termine** :
+
+- terminez avec votre raccourci habituel → texte normal ;
+- terminez avec le raccourci 1337 → cette dictée sort en leet speak (`a→4`, `e→3`, `i→1`, `o→0`, `s→5`, `t→7`).
+
+Le style se choisit **au moment où vous vous arrêtez**, pas au début : s'en apercevoir au milieu d'une phrase ne coûte plus rien. Trois niveaux, du léger au complet, dans l'onglet **1337**.
+
+Ce même onglet contient un **convertisseur** : collez n'importe quel texte, la version 1337 apparaît en dessous au niveau choisi, un bouton la copie. Purement mécanique — aucun modèle, aucun réseau, aucune clé — et les liens, les adresses e-mail et les chemins de fichiers ne sont jamais touchés. Le même texte donne toujours le même résultat, donc vous pouvez toujours vous relire.
+
+Clic droit sur une dictée de l'historique pour la passer en 1337, ou revenir en arrière.
+
+## Styles de pastille
+
+Réglages → Pastille place la pastille où vous voulez : **en bas** (au-dessus du Dock, le classique), **en haut**, ou **encoche** — une carte qui sort de la zone d'encoche en haut de l'écran. Les trois utilisent le matériau dépoli du système. Sur un Mac sans encoche, le style encoche glisse simplement depuis le bord supérieur.
+
 ## Modèles
 
 L'assistant choisit le modèle qui convient à votre Mac. Vous pouvez en changer dans la page Modèles.
