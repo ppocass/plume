@@ -262,14 +262,22 @@ final class PillPanel: NSPanel {
         }
     }
 
-    func dismiss() {
-        // ⚠️ **Plus de délai.** Il existait pour laisser jouer une transition de
-        // vue qui n'existe plus (les styles du haut n'en ont plus). Il ne
-        // faisait donc que retarder la sortie de 0,25 s — assez pour que la
-        // disparition paraisse sèche, et Pierre l'a vu.
-        guard pillStyle.hangsFromTop else { orderOut(nil); return }
+    /// Ferme la pastille. Le `completion` est appelé **une fois la fenêtre
+    /// rangée** — c'est lui qui laisse l'appelant vider son état (`phase`) au
+    /// bon moment, pas avant.
+    func dismiss(completion: @escaping () -> Void = {}) {
+        guard pillStyle.hangsFromTop, isVisible else {
+            orderOut(nil)
+            completion()
+            return
+        }
         // Du haut : la carte **remonte** hors de l'écran, comme elle est venue.
-        slideOut { [weak self] in self?.orderOut(nil) }
+        // Le contenu reste affiché pendant tout le trajet — c'est justement ce
+        // qui rend le mouvement visible.
+        slideOut { [weak self] in
+            self?.orderOut(nil)
+            completion()
+        }
     }
 }
 

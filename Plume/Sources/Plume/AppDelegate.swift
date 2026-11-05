@@ -158,9 +158,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             DictationController.shared.setPhaseForSnapshot(.recording)
             PillPanel.shared.present()
             // Entrée → pause → **sortie**, pour vérifier les deux animations.
+            // ⚠️ On passe par `hide()`, **le vrai chemin** — sinon la démo ne
+            // teste pas l'ordre qui compte : remonter d'abord, vider ensuite.
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                DictationController.shared.setPhaseForSnapshot(.hidden)
-                PillPanel.shared.dismiss()
+                DictationController.shared.hideForDemo()
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 4) { NSApp.terminate(nil) }
             return

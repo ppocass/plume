@@ -480,11 +480,29 @@ final class DictationController: ObservableObject {
         PillPanel.shared.present()
     }
 
+    /// Ferme la pastille **par le chemin normal**, pour la vérification
+    /// visuelle (`--demo-pill`). Ne rien ajouter d'autre ici.
+    func hideForDemo() { hide() }
+
     private func hide() {
         hideTask?.cancel()
         hideTask = nil
-        phase = .hidden
-        PillPanel.shared.dismiss()
+        // 🔴 **L'ordre compte.** Mettre `phase = .hidden` d'abord fait que la
+        // vue retire son contenu **immédiatement** : on voit (ou plutôt on ne
+        // voit plus) une fenêtre vide pendant que la fenêtre remonte. Pierre
+        // l'a dit exactement comme ça : « à la place de remonter, elle
+        // disparaît juste ».
+        //
+        // On demande donc d'abord la **sortie animée** ; le contenu ne s'efface
+        // qu'une fois la carte hors de l'écran.
+        guard PillPanel.shared.isVisible, phase != .hidden else {
+            phase = .hidden
+            PillPanel.shared.dismiss()
+            return
+        }
+        PillPanel.shared.dismiss { [weak self] in
+            self?.phase = .hidden
+        }
     }
 
     /// Un clic sur la pastille (hors croix).
