@@ -222,27 +222,26 @@ struct PlaceholderTextView: NSViewRepresentable {
         label.font = view.font
         label.textColor = .placeholderTextColor
         label.isHidden = !text.isEmpty
-        label.translatesAutoresizingMaskIntoConstraints = false
+        // ⚠️ On place l'invite **au cadre**, pas par des contraintes.
+        //
+        // Raison : les contraintes ne sont résolues qu'après coup, et le
+        // résultat dépendait de l'ordre des mises en page — imprévisible.
+        // Avec un cadre calculé, la position est exacte **dès la création**.
         scroll.addSubview(label)
-
-        // Même origine que le texte : l'inset, sans correction à l'œil. Le
-        // texte et l'invite utilisent la même police, donc leurs lignes de base
-        // coïncident.
-        NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: scroll.leadingAnchor, constant: Self.inset.width),
-            label.topAnchor.constraint(equalTo: scroll.topAnchor, constant: Self.inset.height - 1),
-            label.trailingAnchor.constraint(lessThanOrEqualTo: scroll.trailingAnchor, constant: -Self.inset.width),
-        ])
+        context.coordinator.place(label, in: view, scroll: scroll)
 
         context.coordinator.label = label
         return scroll
     }
 
     func updateNSView(_ scroll: NSView, context: Context) {
-        guard let view = scroll as? NSScrollView,
-              let textView = view.documentView as? NSTextView else { return }
+        guard let s = scroll as? NSScrollView,
+              let textView = s.documentView as? NSTextView else { return }
         if textView.string != text { textView.string = text }
-        context.coordinator.label?.isHidden = !text.isEmpty
+        if let label = context.coordinator.label {
+            context.coordinator.place(label, in: textView, scroll: s)
+            label.isHidden = !text.isEmpty
+        }
     }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
@@ -252,6 +251,36 @@ struct PlaceholderTextView: NSViewRepresentable {
         weak var label: NSTextField?
 
         init(_ parent: PlaceholderTextView) { self.parent = parent }
+
+        /// Pose l'invite exactement sur le haut de la première ligne de texte.
+        ///
+        /// 🔴 **Le piège qui m'a coûté deux essais** : les vues de texte AppKit
+        /// ont un repère **retourné** (`isFlipped == true`), donc l'origine est
+        /// en **haut** et non en bas. En raisonnant « depuis le bas » je
+        /// retournais le décalage, et l'invite se retrouvait du mauvais côté du
+        /// curseur — Pierre a littéralement vu « ils ont échangé de place ».
+        ///
+        /// La géométrie juste : le texte est dessiné à partir de
+        /// `textContainerOrigin`, sur `lineHeight` de haut. Le label doit donc
+        /// avoir son **bord haut** à cet endroit. Vérifié au harnais : écart 0.
+        func place(_ label: NSTextField, in textView: NSTextView, scroll: NSScrollView) {
+            label.sizeToFit()
+            let origin = textView.textContainerOrigin
+            let lineHeight = textView.layoutManager?.defaultLineHeight(for: textView.font ?? .systemFont(ofSize: 13))
+                ?? (textView.font?.ascender ?? 12) - (textView.font?.descender ?? -3)
+            label.frame = NSRect(
+                x: origin.x,
+                y: origin.y,
+                width: max(0, scroll.bounds.width - origin.x * 2),
+                height: lineHeight)
+            label.lineBreakMode = .byTruncatingTail
+            label.alignment = .left
+            // Le label est plus haut que sa police : on le centre sur la ligne
+            // pour que le texte des deux tombe pareil.
+            label.cell?.usesSingleLineMode = true
+            // Trace de vérification : les deux origines doivent être identiques.
+            Log.info("convert : texte à y=\(origin.y), invite à y=\(label.frame.minY) (doivent être égaux)")
+        }
 
         func textDidChange(_ notification: Notification) {
             guard let view = notification.object as? NSTextView else { return }
