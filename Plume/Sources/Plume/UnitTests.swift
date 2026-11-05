@@ -365,7 +365,9 @@ enum UnitTests {
         check(Shortcut.pairPresets.count == 5, "cinq couples proposés (\(Shortcut.pairPresets.count))")
         check(Shortcut.pairPresets.allSatisfy { $0.kind == .modifierCombo }, "les préréglages sont des couples")
         check(Set(Shortcut.pairPresets.map(\.display)).count == Shortcut.pairPresets.count, "pas de doublon")
-        check(Shortcut.pairPresets.contains(.leetDefault), "⌘⌥ est bien le défaut")
+        check(Shortcut.leetPairFor(.default)?.label.contains("fn") == true, "1337 = ⌘ + la touche de dictée (⌘fn)")
+        check(Shortcut.leetPairFor(Shortcut.modifierKey(58)!)?.label.contains("⌥") == true, "avec ⌥ en dictée → ⌘⌥")
+        check(Shortcut.leetPairFor(Shortcut.modifierKey(55)!) == nil, "pas de ⌘+⌘")
     }
 
     static func filter() {

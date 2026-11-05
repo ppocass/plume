@@ -117,7 +117,22 @@ struct Shortcut: Codable, Equatable {
     // MARK: Deux modificateurs tenus ensemble
 
     /// ⌘ gauche + ⌥ gauche : le geste par défaut du 1337.
-    static let leetDefault = comboModifiers(55, 58)!
+    /// Le raccourci 1337 d'origine : **⌘ gauche + ⌥ gauche**.
+    ///
+    /// ⚠️ Ce n'est **plus le défaut d'une nouvelle installation** : la dictée
+    /// est sur **fn**, donc le 1337 se donne sur **⌘ + fn**, qui est le même
+    /// geste plus une touche et évite d'aller chercher ⌥. Pierre a choisi ⌘⌥
+    /// pour lui, et son réglage est conservé ; `leetPairFor(_:)` fait suivre
+    /// un raccourci de dictée modifié.
+    static let leetLegacyDefault = comboModifiers(55, 58)!
+
+    /// Le couple 1337 qui correspond à une touche de dictée : **⌘ + cette
+    /// touche**. fn → ⌘+fn. Refusé si la touche est déjà ⌘ (on ne peut pas
+    /// appuyer deux fois dessus) ou si ce n'est pas un modificateur.
+    static func leetPairFor(_ dictation: Shortcut) -> Shortcut? {
+        guard dictation.kind == .modifier, dictation.keyCode != 55, dictation.keyCode != 54 else { return nil }
+        return comboModifiers(55, dictation.keyCode, allowFn: true)
+    }
 
 
     /// Un raccourci « deux modificateurs tenus ensemble ». Refusé (nil) si
@@ -125,7 +140,16 @@ struct Shortcut: Codable, Equatable {
     /// ou si c'est deux fois le même modificateur (⌘ gauche + ⌘ droite) : on ne
     /// saurait pas lequel garder appuyé avant de relâcher l'autre.
     static func comboModifiers(_ first: Int64, _ second: Int64) -> Shortcut? {
-        guard first != 63 && second != 63, first != second,
+        comboModifiers(first, second, allowFn: false)
+    }
+
+    /// `allowFn` : accepte **⌘ + fn** (le couple 1337 par défaut). `fn` est
+    /// refusé dans les autres couples parce qu'il sert de touche de dictée :
+    /// le tenir avec ⌥ ou ⌃ n'a pas de sens, mais avec ⌘ il donne un second
+    /// geste cohérent avec la touche de dictée.
+    static func comboModifiers(_ first: Int64, _ second: Int64, allowFn: Bool) -> Shortcut? {
+        let fn = { (c: Int64) in c == 63 }
+        guard (allowFn || (!fn(first) && !fn(second))), first != second,
               let a = mods[first], let b = mods[second], a.general != b.general else { return nil }
         // Ordre fixe (⌘, ⌥, ⌃, ⇧) : ⌘⌥ et ⌥⌘ sont le même raccourci, et l'ordre
         // de frappe ne change ni l'égalité ni ce qui s'affiche.

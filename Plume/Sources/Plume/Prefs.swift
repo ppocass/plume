@@ -296,8 +296,14 @@ final class Prefs: ObservableObject {
         shortcut = Self.loadShortcut(defaults)
         leetEnabled = defaults.bool(forKey: "leetEnabled")
         leetLevel = Leet.Level(rawValue: defaults.string(forKey: "leetLevel") ?? "") ?? .medium
+        // Le 1337 suit la touche de dictée : **⌘ + fn** par défaut, comme elle.
+        // Un réglage déjà enregistré (comme le ⌘⌥ de Pierre) est conservé tel quel.
+        // Le 1337 suit la touche de dictée : **⌘ + fn** par défaut, comme elle.
+        // Un réglage déjà enregistré (comme le ⌘⌥ de Pierre) est conservé tel quel.
+        let dictation = Self.loadShortcut(defaults)
         leetShortcut = (defaults.data(forKey: "leetShortcut").flatMap { try? JSONDecoder().decode(Shortcut.self, from: $0) })
-            ?? .leetDefault
+            ?? Shortcut.leetPairFor(dictation)
+            ?? .leetLegacyDefault
         appLanguage = AppLanguage.current
         appearance = AppAppearance.current
         language = DictationLanguage(rawValue: defaults.string(forKey: "language") ?? "") ?? .auto
