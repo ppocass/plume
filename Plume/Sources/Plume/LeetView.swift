@@ -120,10 +120,16 @@ private struct LeetTransformer: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            TextEditor(text: $input)
-                .font(.system(.body, design: .monospaced))
-                .frame(minHeight: 90)
-                .padding(6)
+            // ⚠️ **Un vrai NSTextView, pas le `TextEditor` de SwiftUI.** Ce
+            // dernier garde des marges internes qu'on ne peut pas régler : le
+            // curseur apparaissait collé au coin haut-gauche, à côté du texte
+            // d'invite, et rien ne s'alignait (signalé par Pierre le 05/11).
+            // Ici on choisit `textContainerInset`, donc le curseur et l'invite
+            // partagent exactement la même origine.
+            PlaceholderTextView(text: $input,
+                                placeholder: L("Collez ou tapez du texte ici…",
+                                                "Paste or type text here…"))
+                .frame(minHeight: 96)
                 .background(
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .fill(Color.primary.opacity(0.04))
@@ -132,17 +138,6 @@ private struct LeetTransformer: View {
                     RoundedRectangle(cornerRadius: 8, style: .continuous)
                         .strokeBorder(Color.primary.opacity(0.10))
                 )
-                .overlay(alignment: .topLeading) {
-                    if input.isEmpty {
-                        Text(L("Collez ou tapez du texte ici…", "Paste or type text here…"))
-                            .font(.system(.body, design: .monospaced))
-                            .foregroundStyle(.tertiary)
-                            .padding(.horizontal, 11)
-                            .padding(.vertical, 14)
-                            .allowsHitTesting(false)
-                    }
-                }
-                .focusEffectDisabled()
 
             if !input.isEmpty {
                 HStack {
@@ -180,5 +175,88 @@ private struct LeetTransformer: View {
             }
         }
         .padding(.vertical, 2)
+    }
+}
+
+/// Un champ de texte multiligne **dont on maîtrise les marges**.
+///
+/// SwiftUI n'expose pas `textContainerInset` : le curseur et le texte d'invite
+/// ne pouvaient pas s'aligner (signalé par Pierre le 05/11 — curseur collé au
+/// coin, invite à côté). On passe donc par AppKit et on pose **une seule marge**,
+/// utilisée à la fois par le texte et par l'invite : elles coïncident au pixel.
+///
+/// ⚠️ L'invite est une **vue par-dessus**, jamais du texte dans la zone de
+/// saisie : sinon elle se retrouverait collée si on clique dessus, et elle
+/// compterait comme du contenu.
+struct PlaceholderTextView: NSViewRepresentable {
+    @Binding var text: String
+    var placeholder: String
+
+    /// La marge intérieure, choisie ici et **partagée** par le texte et l'invite.
+    static let inset = NSSize(width: 9, height: 10)
+
+    func makeNSView(context: Context) -> NSView {
+        let scroll = NSTextView.scrollableTextView()
+        guard let view = scroll.documentView as? NSTextView else { return scroll }
+
+        view.delegate = context.coordinator
+        view.isRichText = false
+        view.allowsUndo = true
+        view.font = .monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
+        view.textContainerInset = Self.inset
+        // ⚠️ **Indispensable.** `lineFragmentPadding` ajoute 5 pt de marge
+        // gauche/droite par défaut, en plus de `textContainerInset` : le texte
+        // commencerait à 13 pt alors que l'invite est à 8, et le décalage
+        // reviendrait. À zéro, les deux partent exactement du même point.
+        view.textContainer?.lineFragmentPadding = 0
+        view.isAutomaticQuoteSubstitutionEnabled = false
+        view.isAutomaticDashSubstitutionEnabled = false
+        view.isAutomaticTextReplacementEnabled = false
+        view.drawsBackground = false
+        scroll.drawsBackground = false
+        scroll.hasVerticalScroller = true
+        scroll.autohidesScrollers = true
+
+        // L'invite, dessinée par-dessus la zone de texte, à la même origine.
+        let label = NSTextField(labelWithString: placeholder)
+        label.font = view.font
+        label.textColor = .placeholderTextColor
+        label.isHidden = !text.isEmpty
+        label.translatesAutoresizingMaskIntoConstraints = false
+        scroll.addSubview(label)
+
+        // Même origine que le texte : l'inset, sans correction à l'œil. Le
+        // texte et l'invite utilisent la même police, donc leurs lignes de base
+        // coïncident.
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: scroll.leadingAnchor, constant: Self.inset.width),
+            label.topAnchor.constraint(equalTo: scroll.topAnchor, constant: Self.inset.height - 1),
+            label.trailingAnchor.constraint(lessThanOrEqualTo: scroll.trailingAnchor, constant: -Self.inset.width),
+        ])
+
+        context.coordinator.label = label
+        return scroll
+    }
+
+    func updateNSView(_ scroll: NSView, context: Context) {
+        guard let view = scroll as? NSScrollView,
+              let textView = view.documentView as? NSTextView else { return }
+        if textView.string != text { textView.string = text }
+        context.coordinator.label?.isHidden = !text.isEmpty
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        var parent: PlaceholderTextView
+        weak var label: NSTextField?
+
+        init(_ parent: PlaceholderTextView) { self.parent = parent }
+
+        func textDidChange(_ notification: Notification) {
+            guard let view = notification.object as? NSTextView else { return }
+            parent.text = view.string
+            label?.isHidden = !view.string.isEmpty
+        }
     }
 }
