@@ -19,3 +19,4 @@ xcuserdata/
 # Vercel (lien local et jeton)
 site/.vercel/
 site/.env*
+brag-output-*/
