@@ -527,7 +527,8 @@ enum UnitTests {
         check(meetingLE32(data, at: 40) == 32000, "en-tête : 32000 octets de données")
 
         // Relu au milieu : les échantillons d'origine, au millième près.
-        let reread = WavFileWriter.read(url, from: 8000, count: 100)
+        let all = (try? Data(contentsOf: url)).flatMap { SpeechGate.readWav($0) } ?? []
+        let reread = all.count >= 8100 ? Array(all[8000..<8100]) : []
         check(reread.count == 100 && zip(reread, samples[8000..<8100]).allSatisfy { abs($0 - $1) < 0.001 },
               "100 échantillons relus au bon endroit")
 

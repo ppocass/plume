@@ -21,13 +21,26 @@ import Foundation
 /// Le son sort en **16 kHz mono** sur la file du tap ; rien n'est gardé ici.
 @available(macOS 14.4, *)
 final class SystemAudioTap: @unchecked Sendable {
-    /// Morceau converti (16 kHz mono) et son niveau 0…1, sur la file du tap.
-    var onSamples: (@Sendable (_ samples: UnsafeBufferPointer<Float>, _ level: Float) -> Void)?
+    typealias Handler = @Sendable (_ samples: UnsafeBufferPointer<Float>, _ level: Float) -> Void
+
+    /// Ce qui est partagé entre la file du son, la file de contrôle et le fil
+    /// principal : toujours sous ce verrou.
+    private let lock = NSLock()
+    private var handler: Handler?
+    private var source = ""
+    private var targets: [pid_t] = []
+
+    /// Morceau converti (16 kHz mono) et son niveau 0…1, sur la file du son.
+    var onSamples: Handler? {
+        get { lock.lock(); defer { lock.unlock() }; return handler }
+        set { lock.lock(); handler = newValue; lock.unlock() }
+    }
 
     /// Ce qu'on écoute, pour l'en-tête de la réunion (« Zoom », « Son du Mac »).
-    private(set) var sourceName = ""
-    /// Les processus écoutés (vide = tout le Mac sauf Plume).
-    private(set) var targetPIDs: [pid_t] = []
+    var sourceName: String {
+        lock.lock(); defer { lock.unlock() }
+        return source
+    }
 
     enum TapError: LocalizedError {
         case unavailable(String, OSStatus)
@@ -39,7 +52,11 @@ final class SystemAudioTap: @unchecked Sendable {
         }
     }
 
-    private let queue = DispatchQueue(label: "plume.system-audio", qos: .userInitiated)
+    /// Le son arrive sur `ioQueue` ; tout ce qui construit ou détruit le tap
+    /// passe par `controlQueue`. Jamais l'un sur l'autre : arrêter le
+    /// périphérique depuis la file qui reçoit son son peut l'attendre pour toujours.
+    private let ioQueue = DispatchQueue(label: "plume.system-audio", qos: .userInitiated)
+    private let controlQueue = DispatchQueue(label: "plume.system-audio.control", qos: .userInitiated)
     private var tapID = AudioObjectID(kAudioObjectUnknown)
     private var aggregateID = AudioObjectID(kAudioObjectUnknown)
     private var procID: AudioDeviceIOProcID?
@@ -61,22 +78,25 @@ final class SystemAudioTap: @unchecked Sendable {
     nonisolated(unsafe) static var testMeetingPID: pid_t?
 
     func start() throws {
-        try queue.sync { try build() }
+        try controlQueue.sync { try build() }
         listenForOutputChanges()
     }
 
     func stop() {
         if let outputListener {
             var address = Self.address(kAudioHardwarePropertyDefaultOutputDevice)
-            AudioObjectRemovePropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, queue, outputListener)
+            AudioObjectRemovePropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, controlQueue, outputListener)
             self.outputListener = nil
         }
-        queue.sync { tearDown() }
+        controlQueue.sync { tearDown() }
     }
 
     /// Une des apps ciblées tourne-t-elle encore ? (Toujours vrai pour le tap global.)
     var targetIsAlive: Bool {
-        targetPIDs.isEmpty || targetPIDs.contains { kill($0, 0) == 0 }
+        lock.lock()
+        let pids = targets
+        lock.unlock()
+        return pids.isEmpty || pids.contains { kill($0, 0) == 0 }
     }
 
     // MARK: Construction
@@ -86,13 +106,11 @@ final class SystemAudioTap: @unchecked Sendable {
         let targets = Self.meetingProcesses()
         if let first = targets.first {
             description = CATapDescription(monoMixdownOfProcesses: targets.map(\.object))
-            sourceName = first.name
-            targetPIDs = targets.map(\.pid)
+            lock.lock(); source = first.name; self.targets = targets.map(\.pid); lock.unlock()
         } else {
             let me = Self.processObject(for: getpid()).map { [$0] } ?? []
             description = CATapDescription(monoGlobalTapButExcludeProcesses: me)
-            sourceName = L("Son du Mac", "Mac audio")
-            targetPIDs = []
+            lock.lock(); source = L("Son du Mac", "Mac audio"); self.targets = []; lock.unlock()
         }
         description.uuid = UUID()
         description.name = "Plume"
@@ -132,7 +150,7 @@ final class SystemAudioTap: @unchecked Sendable {
             aggregateID = device
 
             var proc: AudioDeviceIOProcID?
-            status = AudioDeviceCreateIOProcIDWithBlock(&proc, device, queue) { [weak self] _, input, _, _, _ in
+            status = AudioDeviceCreateIOProcIDWithBlock(&proc, device, ioQueue) { [weak self] _, input, _, _, _ in
                 self?.receive(input)
             }
             guard status == noErr, let proc else { throw TapError.unavailable("ioproc", status) }
@@ -140,7 +158,7 @@ final class SystemAudioTap: @unchecked Sendable {
             status = AudioDeviceStart(device, proc)
             guard status == noErr else { throw TapError.unavailable("start", status) }
             running = true
-            Log.info("son du Mac : écoute de « \(sourceName) » (\(Int(format.sampleRate)) Hz, \(format.channelCount) canal/canaux)")
+            Log.info("son du Mac : écoute de « \(self.sourceName) » (\(Int(format.sampleRate)) Hz, \(format.channelCount) canal/canaux)")
         } catch {
             tearDown()
             throw error
@@ -154,6 +172,9 @@ final class SystemAudioTap: @unchecked Sendable {
         }
         procID = nil
         running = false
+        // Un dernier morceau peut encore attendre sur la file du son : on le
+        // laisse passer avant de retirer le convertisseur qu'il utilise.
+        ioQueue.sync {}
         if aggregateID != kAudioObjectUnknown { AudioHardwareDestroyAggregateDevice(aggregateID) }
         aggregateID = AudioObjectID(kAudioObjectUnknown)
         if tapID != kAudioObjectUnknown { AudioHardwareDestroyProcessTap(tapID) }
@@ -175,13 +196,15 @@ final class SystemAudioTap: @unchecked Sendable {
                 Log.info("son du Mac : reconstruction impossible après changement de sortie (\(error.localizedDescription))")
             }
         }
-        if AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, queue, block) == noErr {
+        if AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, controlQueue, block) == noErr {
             outputListener = block
         }
     }
 
     // MARK: File du tap
 
+    /// `format` et `resampler` ne changent que pendant `build`/`tearDown`, quand
+    /// l'IOProc est arrêté : la file du son les lit sans verrou.
     private func receive(_ input: UnsafePointer<AudioBufferList>) {
         guard let format, let resampler, let onSamples,
               let buffer = AVAudioPCMBuffer(pcmFormat: format, bufferListNoCopy: input, deallocator: nil) else { return }

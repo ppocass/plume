@@ -112,6 +112,8 @@ final class MeetingRecorder: ObservableObject {
     private var polishPausedUntil = Date.distantPast
 
     private var nextID = 1
+    /// Le jeton qui tient le moteur pendant cette réunion.
+    private var engineToken = UUID()
     private var open: [MeetingSpeaker: OpenParagraph] = [:]
     /// Tous les paragraphes terminés (texte seulement : 2 h ≈ 150 Ko).
     private var paragraphs: [MeetingParagraph] = []
@@ -180,14 +182,16 @@ final class MeetingRecorder: ObservableObject {
         polishPausedUntil = .distantPast
         let engine = SpeechEngine.engine(for: model)
         self.engine = engine
+        let token = session
+        engineToken = token
         Task.detached(priority: .utility) {
-            await engine.hold()
+            await engine.hold(token)
             try? await engine.ensureRunning()
         }
 
         // Le tap peut attendre la réponse de l'utilisateur à la demande
         // d'autorisation : jamais sur le fil principal.
-        guard #available(macOS 14.4, *) else { return }
+        guard #available(macOS 14.4, *) else { failStart(L("macOS 14.4 ou plus est nécessaire", "macOS 14.4 or later is required")); return }
         let tap = SystemAudioTap()
         Task.detached(priority: .userInitiated) {
             do {
@@ -207,13 +211,18 @@ final class MeetingRecorder: ObservableObject {
         let clock = ProcessInfo.processInfo.systemUptime
         self.clock = clock
         textLags = []
+        var created: MeetingFolder?
+        var tracks: [MeetingTrack] = []
         do {
             let folder = try MeetingFolder.create(date: now, source: tap.sourceName)
+            created = folder
             let meta = MeetingMeta(startedAt: now, endedAt: nil, duration: 0, source: tap.sourceName, model: model.id,
                                    words: 0, paragraphs: 0, recording: true)
             let transcript = try MeetingTranscript(folder: folder, meta: meta)
             let mic = try MeetingTrack(speaker: .me, url: folder.micURL, clock: clock)
+            tracks.append(mic)
             let system = try MeetingTrack(speaker: .them, url: folder.systemURL, clock: clock)
+            tracks.append(system)
             let levels = self.levels
             tap.onSamples = { chunk, level in
                 system.feed(chunk)
@@ -235,7 +244,11 @@ final class MeetingRecorder: ObservableObject {
             startLoops()
             Log.info("réunion démarrée : \(folder.name) (modèle \(model.id))")
         } catch {
+            // Rien ne doit rester derrière un démarrage raté : ni pistes
+            // ouvertes ni dossier « en cours » vide.
             tap.stop()
+            tracks.forEach { $0.close() }
+            if let created { try? FileManager.default.trashItem(at: created.url, resultingItemURL: nil) }
             Log.info("réunion : démarrage impossible (\(error.localizedDescription))")
             failStart(L("Réunion impossible à démarrer", "Could not start the meeting"))
         }
@@ -252,6 +265,9 @@ final class MeetingRecorder: ObservableObject {
 
     /// Arrête et garde tout. La fin (transcription, lissage, fichier) se fait derrière.
     func stop(reason: StopReason = .user) {
+        // Encore en train de démarrer (l'autorisation attend une réponse) :
+        // rien n'est enregistré, arrêter revient à abandonner.
+        if phase == .starting { discard(); return }
         guard phase == .recording else { return }
         stopReason = reason
         stoppedElapsed = elapsed
@@ -273,6 +289,8 @@ final class MeetingRecorder: ObservableObject {
     func discard() {
         guard phase == .recording || phase == .starting else { return }
         let folder = self.folder
+        // Un travail resté en vol ne touchera plus à rien.
+        session = UUID()
         tickLoop?.cancel()
         tickLoop = nil
         jobs?.finish()
@@ -371,7 +389,6 @@ final class MeetingRecorder: ObservableObject {
             guard var p = open[speaker] else { return }
             p.audio += samples
             p.silence += chunkEnd - chunkStart
-            p.end = max(p.end, chunkStart)
             if p.silence >= Self.paragraphPause { await close(p) } else { open[speaker] = p }
             return
         }
@@ -429,31 +446,39 @@ final class MeetingRecorder: ObservableObject {
         }
         raw = VocabularyStore.shared.snapshot.apply(to: raw).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !raw.isEmpty else { removeLine(p.id); return }
-        let end = p.end - p.silence
-        if p.speaker == .me, isEcho(raw, from: p.start, to: end) {
+        var paragraph = MeetingParagraph(id: p.id, speaker: p.speaker, start: p.start, end: max(p.start, p.end),
+                                         raw: raw, text: raw, polished: false)
+        if p.speaker == .me, isEcho(raw, from: paragraph.start, to: paragraph.end) {
             echoesDropped += 1
             removeLine(p.id)
-            Log.info("réunion : paragraphe du micro ignoré (écho du haut-parleur)")
+            paragraph.echo = true
+            transcript?.record(paragraph)
+            Log.info("réunion : paragraphe du micro mis de côté (écho du haut-parleur)")
             return
         }
-        let paragraph = MeetingParagraph(id: p.id, speaker: p.speaker, start: p.start, end: max(p.start, end),
-                                         raw: raw, text: raw, polished: false)
         paragraphs.append(paragraph)
         transcript?.record(paragraph)
         update(paragraph)
         enqueuePolish(paragraph)
     }
 
-    /// Le micro a ré-enregistré ce que disaient les haut-parleurs : la plupart
-    /// de ses mots sont dans ce que « Eux » disait au même moment.
+    /// Le micro a ré-enregistré ce que disaient les haut-parleurs. Deux preuves
+    /// à la fois : « Eux » parlait **pendant** (au moins la moitié du temps de ce
+    /// paragraphe — une réponse vient après, pas pendant), et la plupart des mots
+    /// sont les siens. « Oui, le devis de mars » dit juste après lui reste à moi.
     private func isEcho(_ text: String, from start: Double, to end: Double) -> Bool {
         let mine = Self.wordSet(text)
-        guard mine.count >= 3 else { return false }
+        guard mine.count >= 3, end > start else { return false }
+        var spans: [(Double, Double, String)] = paragraphs.filter { $0.speaker == .them }.map { ($0.start, $0.end, $0.raw) }
+        if let q = open[.them] { spans.append((q.start, q.end, q.liveText)) }
+        var overlap = 0.0
         var theirs = ""
-        for q in paragraphs where q.speaker == .them && q.end >= start - 1 && q.start <= end + 1 { theirs += " " + q.raw }
-        if let q = open[.them], q.end >= start - 1, q.start <= end + 1 { theirs += " " + q.liveText }
+        for (s, e, text) in spans where e > start && s < end {
+            overlap += min(e, end) - max(s, start)
+            theirs += " " + text
+        }
+        guard overlap >= 0.5 * (end - start) else { return false }
         let other = Self.wordSet(theirs)
-        guard !other.isEmpty else { return false }
         return Double(mine.intersection(other).count) / Double(mine.count) >= 0.6
     }
 
@@ -530,8 +555,10 @@ final class MeetingRecorder: ObservableObject {
         }
 
         guard let folder, var meta else { reset(); return }
-        // Démarrage raté : moins de 10 s et rien d'écrit → rien à garder.
-        if paragraphs.isEmpty && elapsed < 10 {
+        // Démarrage raté : moins de 10 s et **aucune parole entendue** sur les
+        // deux pistes (aucun paragraphe n'a jamais été ouvert) → rien à garder.
+        // De la parole non transcrite (moteur pas prêt), elle, est gardée.
+        if nextID == 1 && elapsed < 10 {
             transcript?.finish(meta: meta, paragraphs: [])
             try? FileManager.default.trashItem(at: folder.url, resultingItemURL: nil)
             Log.info("réunion vide de moins de 10 s : dossier à la Corbeille")
@@ -589,7 +616,8 @@ final class MeetingRecorder: ObservableObject {
     private func releaseEngine() {
         guard let engine else { return }
         self.engine = nil
-        Task.detached { await engine.unhold(idleAfter: Prefs.idleSeconds) }
+        let token = engineToken
+        Task.detached { await engine.unhold(token, idleAfter: Prefs.idleSeconds) }
     }
 
     private func writeMeta() {

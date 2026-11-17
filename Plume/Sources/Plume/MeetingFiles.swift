@@ -21,6 +21,10 @@ struct MeetingParagraph: Codable, Identifiable, Equatable, Sendable {
     var polished: Bool
     /// Encore en train de s'écrire (le paragraphe n'est pas fermé).
     var open: Bool = false
+    /// Le micro a ré-enregistré les haut-parleurs : gardé dans le journal (rien
+    /// ne se jette), jamais montré ni écrit dans `réunion.md`. Optionnel pour
+    /// relire les journaux qui ne l'ont pas.
+    var echo: Bool? = nil
 
     var words: Int { text.split(whereSeparator: { $0.isWhitespace }).count }
 }
@@ -95,7 +99,8 @@ struct MeetingFolder: Identifiable, Hashable, Sendable {
         return try? MeetingFiles.decoder.decode(MeetingMeta.self, from: data)
     }
 
-    /// Les paragraphes, la dernière version de chacun, dans l'ordre du temps.
+    /// Les paragraphes, la dernière version de chacun, dans l'ordre du temps
+    /// (sans les échos).
     func readParagraphs() -> [MeetingParagraph] {
         guard let data = try? Data(contentsOf: paragraphsURL) else { return [] }
         var latest: [Int: MeetingParagraph] = [:]
@@ -104,7 +109,8 @@ struct MeetingFolder: Identifiable, Hashable, Sendable {
                 latest[p.id] = p
             }
         }
-        return latest.values.sorted { $0.start == $1.start ? $0.id < $1.id : $0.start < $1.start }
+        return latest.values.filter { $0.echo != true }
+            .sorted { $0.start == $1.start ? $0.id < $1.id : $0.start < $1.start }
     }
 
     var hasAudio: Bool {
@@ -121,17 +127,19 @@ struct MeetingFolder: Identifiable, Hashable, Sendable {
 }
 
 enum MeetingFiles {
-    static let encoder: JSONEncoder = {
+    /// Un neuf à chaque usage : ni l'un ni l'autre n'est sûr entre plusieurs
+    /// fils (la file du journal, la remise en ordre au lancement, la page Réunions).
+    static var encoder: JSONEncoder {
         let e = JSONEncoder()
         e.dateEncodingStrategy = .iso8601
         e.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         return e
-    }()
-    static let decoder: JSONDecoder = {
+    }
+    static var decoder: JSONDecoder {
         let d = JSONDecoder()
         d.dateDecodingStrategy = .iso8601
         return d
-    }()
+    }
 
     /// `[00:04:12]`
     static func timestamp(_ seconds: Double) -> String {

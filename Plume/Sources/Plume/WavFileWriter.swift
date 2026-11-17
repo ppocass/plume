@@ -83,20 +83,4 @@ final class WavFileWriter: @unchecked Sendable {
         ascii("data"); le32(dataBytes)
         return data
     }
-
-    /// Lit une portion d'un WAV 16 kHz mono 16 bits écrit par cette classe
-    /// (en-tête de 44 octets), en échantillons. Pour relire un paragraphe.
-    static func read(_ url: URL, from start: Int, count: Int) -> [Float] {
-        guard count > 0, let handle = try? FileHandle(forReadingFrom: url) else { return [] }
-        defer { try? handle.close() }
-        do {
-            try handle.seek(toOffset: UInt64(44 + start * 2))
-            guard let data = try handle.read(upToCount: count * 2) else { return [] }
-            return data.withUnsafeBytes { raw in
-                raw.bindMemory(to: Int16.self).map { Float(Int16(littleEndian: $0)) / 32768 }
-            }
-        } catch {
-            return []
-        }
-    }
 }

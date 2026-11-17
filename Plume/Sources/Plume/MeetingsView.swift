@@ -419,9 +419,9 @@ private struct MeetingDetailView: View {
 
     private func requestDelete() {
         guard !isRecordingThis else { return }
-        // Dix secondes : une réunion lancée par erreur, rien à confirmer.
-        // Sans méta lue, on ne sait pas : on demande.
-        if let duration = meta?.duration, duration < 10 {
+        // Moins de dix secondes **et** aucun mot : une réunion lancée par
+        // erreur, rien à confirmer. Sinon (ou sans méta lue) : on demande.
+        if let meta, meta.duration < 10, meta.words == 0, paragraphs.isEmpty {
             deleteNow()
         } else {
             confirmDelete = true

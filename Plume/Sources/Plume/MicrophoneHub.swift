@@ -202,22 +202,26 @@ final class MicrophoneHub: @unchecked Sendable {
         guard let resampler, !targets.isEmpty else { return }
         resampler.convert(buffer) { chunk in
             let level = MonoResampler.level(of: chunk)
-            noteDigitalSilence(chunk)
+            if noteDigitalSilence(chunk) {
+                DispatchQueue.main.async {
+                    Log.info("micro ouvert mais silence numérique depuis 5 s (coreaudiod ou micro coupé ?)")
+                }
+            }
             for handler in targets { handler(chunk, level) }
         }
     }
 
-    private func noteDigitalSilence(_ chunk: UnsafeBufferPointer<Float>) {
+    /// Vrai une seule fois, quand le micro ne rend que des zéros depuis 5 s
+    /// (le message part sur le fil principal : rien d'autre ne s'écrit d'ici).
+    private func noteDigitalSilence(_ chunk: UnsafeBufferPointer<Float>) -> Bool {
+        let silent = !chunk.contains(where: { $0 != 0 })
         let now = ProcessInfo.processInfo.systemUptime
-        if chunk.contains(where: { $0 != 0 }) {
-            zeroSince = nil
-            return
-        }
+        lock.lock(); defer { lock.unlock() }
+        guard silent else { zeroSince = nil; return false }
         if zeroSince == nil { zeroSince = now }
-        if !zeroReported, let since = zeroSince, now - since > 5 {
-            zeroReported = true
-            Log.info("micro ouvert mais silence numérique depuis 5 s (coreaudiod ou micro coupé ?)")
-        }
+        guard !zeroReported, let since = zeroSince, now - since > 5 else { return false }
+        zeroReported = true
+        return true
     }
 }
 

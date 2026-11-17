@@ -86,9 +86,10 @@ actor SpeechEngine {
     private var startTask: Task<Void, Error>?
     private var idleTask: Task<Void, Never>?
     private var busy = 0
-    /// Une réunion en cours tient le moteur : pas de mise en veille tant
-    /// qu'elle dure (sinon il s'arrêterait 35 s après chaque dictée).
-    private var holds = 0
+    /// Les réunions en cours tiennent le moteur : pas de mise en veille tant
+    /// qu'elles durent (sinon il s'arrêterait 35 s après chaque dictée). Un
+    /// jeton par réunion : l'ordre d'arrivée de `hold`/`unhold` n'importe pas.
+    private var holds: Set<UUID> = []
 
     private var baseURL: URL { URL(string: "http://\(host):\(port)")! }
 
@@ -315,7 +316,7 @@ actor SpeechEngine {
     /// n'est jamais touché.
     func scheduleIdleRelease(after seconds: Double) {
         idleTask?.cancel()
-        guard holds == 0, seconds >= 0, process != nil || adoptedPID != nil else { return }
+        guard holds.isEmpty, seconds >= 0, process != nil || adoptedPID != nil else { return }
         idleTask = Task {
             try? await Task.sleep(for: .seconds(seconds))
             guard !Task.isCancelled else { return }
@@ -324,20 +325,20 @@ actor SpeechEngine {
     }
 
     /// La réunion prend le moteur…
-    func hold() {
-        holds += 1
+    func hold(_ token: UUID) {
+        holds.insert(token)
         idleTask?.cancel()
         idleTask = nil
     }
 
     /// …et le rend : la mise en veille normale reprend.
-    func unhold(idleAfter seconds: Double) {
-        holds = max(0, holds - 1)
+    func unhold(_ token: UUID, idleAfter seconds: Double) {
+        holds.remove(token)
         scheduleIdleRelease(after: seconds)
     }
 
     private func releaseIfIdle() {
-        guard busy == 0, holds == 0, startTask == nil else { return }
+        guard busy == 0, holds.isEmpty, startTask == nil else { return }
         Log.info("pas de dictée depuis \(Int(Prefs.idleSeconds)) s : arrêt du moteur \(model.id), mémoire rendue")
         stopOwned()
     }
