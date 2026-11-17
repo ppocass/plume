@@ -110,6 +110,9 @@ final class MeetingRecorder: ObservableObject {
     private var polishLoop: Task<Void, Never>?
     /// Après un échec du lissage, on n'attend plus de délai réseau pendant 30 s.
     private var polishPausedUntil = Date.distantPast
+    /// Refus de suite du nettoyeur : la pause double à chaque fois (30 s → 8 min).
+    private var polishFailures = 0
+    private var retrying = false
 
     private var nextID = 1
     /// Le jeton qui tient le moteur pendant cette réunion.
@@ -180,6 +183,8 @@ final class MeetingRecorder: ObservableObject {
         echoesDropped = 0
         stopReason = .user
         polishPausedUntil = .distantPast
+        polishFailures = 0
+        retrying = false
         let engine = SpeechEngine.engine(for: model)
         self.engine = engine
         let token = session
@@ -350,6 +355,7 @@ final class MeetingRecorder: ObservableObject {
         }
         if w != warnings { warnings = w }
         if Date().timeIntervalSince(lastMetaWrite) > 10 { writeMeta() }
+        if ticks % 80 == 0 { retryPolish() }
     }
 
     private func freeBytes() -> Int64? {
@@ -511,22 +517,55 @@ final class MeetingRecorder: ObservableObject {
 
     private func polish(_ p: MeetingParagraph, attempt: Bool, session current: UUID) async {
         var p = p
-        if attempt {
-            let vocabulary = VocabularyStore.shared.snapshot
-            let out = await Polisher.polish(p.raw, language: Prefs.shared.effectiveLanguage, spelling: vocabulary.spellingList)
+        if attempt, let fixed = await tryPolish(p) {
             guard current == session else { return }
-            if let out {
-                p.text = vocabulary.apply(to: out)
-                p.polished = true
-            } else {
-                polishPausedUntil = Date().addingTimeInterval(30)
-            }
+            p = fixed
         }
-        if p.polished {
-            replace(p)
-            transcript?.record(p)
-        }
+        guard current == session else { return }
+        // Le fichier ne prend jamais de retard : lissé ou brut, le paragraphe y
+        // est ajouté maintenant. Un brut sera relissé plus tard (`retryPolish`)
+        // et la réécriture finale de `réunion.md` prendra la version propre.
         transcript?.appendToMarkdown(p)
+    }
+
+    /// Une tentative de lissage. Réussie : le paragraphe est remplacé partout
+    /// (widget, journal). Ratée (hors connexion, routeur qui limite le débit) :
+    /// on n'insiste pas pendant 30 s.
+    private func tryPolish(_ p: MeetingParagraph) async -> MeetingParagraph? {
+        let current = session
+        let vocabulary = VocabularyStore.shared.snapshot
+        let out = await Polisher.polish(p.raw, language: Prefs.shared.effectiveLanguage, spelling: vocabulary.spellingList)
+        guard current == session else { return nil }
+        guard let out else {
+            // Le routeur gratuit limite le débit : sur deux heures, une réunion
+            // épuisait sa chaîne de lissage, et la dictée n'était plus nettoyée
+            // non plus. On recule de plus en plus, et la dictée garde la main.
+            polishFailures += 1
+            let pause = min(480, 30 * pow(2, Double(polishFailures - 1)))
+            polishPausedUntil = Date().addingTimeInterval(pause)
+            return nil
+        }
+        polishFailures = 0
+        var fixed = p
+        fixed.text = vocabulary.apply(to: out)
+        fixed.polished = true
+        replace(fixed)
+        transcript?.record(fixed)
+        return fixed
+    }
+
+    /// Toutes les 20 s, si le lissage est libre et que la pause est passée :
+    /// un paragraphe resté brut est relissé. Sur deux heures, un routeur
+    /// gratuit refuse ~15 % des demandes (HTTP 429) : sans ce rattrapage, la
+    /// moitié de la réunion restait « non nettoyée ».
+    private func retryPolish() {
+        guard Prefs.polishWanted, polishLoop == nil, !retrying, Date() >= polishPausedUntil,
+              let next = paragraphs.first(where: { !$0.polished }) else { return }
+        retrying = true
+        Task { [weak self] in
+            _ = await self?.tryPolish(next)
+            self?.retrying = false
+        }
     }
 
     /// Fin : tout ce qui reste est transcrit, les paragraphes fermés, puis une
@@ -539,18 +578,22 @@ final class MeetingRecorder: ObservableObject {
         await jobLoop?.value
         while polishLoop != nil { try? await Task.sleep(for: .milliseconds(100)) }
 
+        while retrying { try? await Task.sleep(for: .milliseconds(100)) }
         if Prefs.polishWanted {
+            // Deux minutes au plus. Un refus isolé n'arrête pas tout (attente de
+            // 3 s puis on continue) ; trois de suite, si : le routeur est saturé,
+            // le reste garde son brut (marqué « non nettoyé ») et pourra être
+            // relissé plus tard.
             let deadline = Date().addingTimeInterval(120)
+            var failures = 0
             for p in paragraphs where !p.polished {
-                guard Date() < deadline else { break }
-                let vocabulary = VocabularyStore.shared.snapshot
-                guard let out = await Polisher.polish(p.raw, language: Prefs.shared.effectiveLanguage,
-                                                      spelling: vocabulary.spellingList) else { break }
-                var fixed = p
-                fixed.text = vocabulary.apply(to: out)
-                fixed.polished = true
-                replace(fixed)
-                transcript?.record(fixed)
+                guard Date() < deadline, failures < 3 else { break }
+                if await tryPolish(p) == nil {
+                    failures += 1
+                    try? await Task.sleep(for: .seconds(3))
+                } else {
+                    failures = 0
+                }
             }
         }
 
