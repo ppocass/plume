@@ -67,12 +67,13 @@ final class MainWindowController: NSObject, NSWindowDelegate {
 }
 
 enum SidebarItem: String, CaseIterable, Identifiable {
-    case home, history, vocabulary, leet, models, settings
+    case home, history, meetings, vocabulary, leet, models, settings
     var id: String { rawValue }
     var title: String {
         switch self {
         case .home: return L("Accueil", "Home")
         case .history: return L("Historique", "History")
+        case .meetings: return L("Réunions", "Meetings")
         case .vocabulary: return L("Vocabulaire", "Vocabulary")
         case .leet: return "1337"
         case .models: return L("Modèles", "Models")
@@ -83,11 +84,19 @@ enum SidebarItem: String, CaseIterable, Identifiable {
         switch self {
         case .home: return "waveform"
         case .history: return "clock.arrow.circlepath"
+        case .meetings: return "person.2.wave.2"
         case .vocabulary: return "character.book.closed"
         case .leet: return "textformat.alt"
         case .models: return "cpu"
         case .settings: return "gearshape"
         }
+    }
+}
+
+extension SidebarItem {
+    /// « Réunions » n'apparaît que si le mode est activé (et possible sur ce Mac).
+    @MainActor var isShown: Bool {
+        self != .meetings || (MeetingRecorder.isSupported && Prefs.shared.meetingEnabled)
     }
 }
 
@@ -110,6 +119,7 @@ struct MainView: View {
                 switch navigation.selection {
                 case .home: HomeView()
                 case .history: HistoryView()
+                case .meetings: MeetingsView()
                 case .vocabulary: VocabularyView()
                 case .leet: LeetView()
                 case .models: ModelsView()
@@ -153,13 +163,14 @@ struct MainView: View {
 /// fenêtre perd le focus) : on dessine la rangée nous-mêmes.
 struct SidebarView: View {
     @EnvironmentObject var navigation: Navigation
+    @EnvironmentObject var prefs: Prefs
     @EnvironmentObject var history: HistoryStore
     @EnvironmentObject var permissions: Permissions
 
     var body: some View {
         List {
             Section {
-                ForEach(SidebarItem.allCases) { item in
+                ForEach(SidebarItem.allCases.filter(\.isShown)) { item in
                     SidebarRow(title: item.title, systemImage: item.symbol,
                                isSelected: navigation.selection == item,
                                badge: badge(for: item)) {
