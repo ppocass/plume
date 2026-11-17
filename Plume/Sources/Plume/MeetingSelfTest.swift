@@ -58,13 +58,13 @@ enum MeetingSelfTest {
         }
         // Cas limites, sans toucher au vrai disque ni à une vraie visio :
         // `PLUME_MEETING_MIN_FREE_GB` relève le seuil du disque,
-        // `PLUME_TEST_MEETING_APP` fait passer une app (QuickTime…) pour une visio.
+        // `PLUME_TEST_MEETING_PID` fait passer un processus (afplay…) pour une visio.
         let env = ProcessInfo.processInfo.environment
         if let gb = env["PLUME_MEETING_MIN_FREE_GB"].flatMap(Double.init) {
             MeetingRecorder.minFreeBytes = Int64(gb * 1_000_000_000)
         }
-        if #available(macOS 14.4, *), let prefix = env["PLUME_TEST_MEETING_APP"] {
-            SystemAudioTap.testMeetingApp = (prefix, "Test")
+        if #available(macOS 14.4, *), let pid = env["PLUME_TEST_MEETING_PID"].flatMap(pid_t.init) {
+            SystemAudioTap.testMeetingPID = pid
         }
         recorder.start()
         Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { timer in

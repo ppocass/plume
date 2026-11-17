@@ -56,8 +56,9 @@ final class SystemAudioTap: @unchecked Sendable {
         ("net.whatsapp.WhatsApp", "WhatsApp"), ("desktop.WhatsApp", "WhatsApp"), ("com.skype.", "Skype"),
     ]
 
-    /// **Autotest seulement** : une app de plus à traiter comme une app de visio.
-    nonisolated(unsafe) static var testMeetingApp: (prefix: String, name: String)?
+    /// **Autotest seulement** : un processus (par exemple `afplay`) à traiter
+    /// comme une app de visio, pour vérifier l'arrêt quand elle se ferme.
+    nonisolated(unsafe) static var testMeetingPID: pid_t?
 
     func start() throws {
         try queue.sync { try build() }
@@ -220,7 +221,7 @@ final class SystemAudioTap: @unchecked Sendable {
             // Seulement si elle joue du son en ce moment : une app de visio ouverte
             // hors appel (WhatsApp au repos) ne doit pas capter l'écoute.
             guard let bundle = stringProperty(object, kAudioProcessPropertyBundleID),
-                  let app = (meetingApps + [testMeetingApp].compactMap { $0 }).first(where: { bundle.hasPrefix($0.prefix) }),
+                  let app = meetingApps.first(where: { bundle.hasPrefix($0.prefix) }),
                   uintProperty(object, kAudioProcessPropertyIsRunningOutput) == 1 else { continue }
             var pid: pid_t = 0
             var pidSize = UInt32(MemoryLayout<pid_t>.size)
@@ -228,6 +229,7 @@ final class SystemAudioTap: @unchecked Sendable {
             guard AudioObjectGetPropertyData(object, &pidAddress, 0, nil, &pidSize, &pid) == noErr else { continue }
             found.append((object, pid, app.name))
         }
+        if let pid = testMeetingPID, let object = processObject(for: pid) { found.append((object, pid, "Test")) }
         return found
     }
 

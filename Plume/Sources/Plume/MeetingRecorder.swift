@@ -117,6 +117,11 @@ final class MeetingRecorder: ObservableObject {
     private var paragraphs: [MeetingParagraph] = []
     private var lastMetaWrite = Date.distantPast
     private var ticks = 0
+    /// Change à chaque réunion : un travail resté en vol (transcription,
+    /// lissage) d'une réunion précédente ne touche jamais la suivante.
+    private var session = UUID()
+    /// La durée, figée à l'arrêt (la finalisation qui suit n'en fait pas partie).
+    private var stoppedElapsed: Double?
     private var echoesDropped = 0
     /// Horloge commune (secondes depuis le démarrage du Mac) au début de la réunion.
     private var clock: TimeInterval = 0
@@ -162,6 +167,8 @@ final class MeetingRecorder: ObservableObject {
             return
         }
         phase = .starting
+        session = UUID()
+        stoppedElapsed = nil
         ticks = 0
         warnings = []
         lines = []
@@ -247,6 +254,7 @@ final class MeetingRecorder: ObservableObject {
     func stop(reason: StopReason = .user) {
         guard phase == .recording else { return }
         stopReason = reason
+        stoppedElapsed = elapsed
         phase = .finishing
         tickLoop?.cancel()
         tickLoop = nil
@@ -277,7 +285,7 @@ final class MeetingRecorder: ObservableObject {
         reset()
     }
 
-    var elapsed: Double { startedAt.map { Date().timeIntervalSince($0) } ?? 0 }
+    var elapsed: Double { stoppedElapsed ?? startedAt.map { Date().timeIntervalSince($0) } ?? 0 }
 
     // MARK: Boucles
 
@@ -347,6 +355,7 @@ final class MeetingRecorder: ObservableObject {
     }
 
     private func process(_ speaker: MeetingSpeaker, start: Int, samples: [Float]) async {
+        let current = session
         let rate = AudioRecorder.sampleRate
         let chunkStart = Double(start) / rate
         let chunkEnd = Double(start + samples.count) / rate
@@ -354,6 +363,7 @@ final class MeetingRecorder: ObservableObject {
         let verdict = SpeechGate.analyse(samples)
         if let range = verdict.range {
             text = await transcribe(samples, range: range)
+            guard current == session else { return }
         }
 
         guard verdict.range != nil else {
@@ -407,12 +417,14 @@ final class MeetingRecorder: ObservableObject {
 
     /// Paragraphe terminé : retranscrit d'un bloc, vérifié (écho), écrit, puis lissé.
     private func close(_ p: OpenParagraph) async {
+        let current = session
         open[p.speaker] = nil
         var raw = p.liveText
         // Plusieurs morceaux : une seconde passe sur tout le paragraphe (30 s
         // en ~0,4 s) répare les mots coupés aux jointures.
         if p.texts.count > 1, let range = SpeechGate.analyse(p.audio).range {
             let whole = await transcribe(p.audio, range: range)
+            guard current == session else { return }
             if !whole.isEmpty { raw = whole }
         }
         raw = VocabularyStore.shared.snapshot.apply(to: raw).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -459,23 +471,26 @@ final class MeetingRecorder: ObservableObject {
         }
         polishQueue.append(p)
         guard polishLoop == nil else { return }
+        let current = session
         polishLoop = Task { [weak self] in
-            while let self, !self.polishQueue.isEmpty {
+            while let self, self.session == current, !self.polishQueue.isEmpty {
                 let next = self.polishQueue.removeFirst()
                 // En retard (réseau lent) : on écrit le brut tout de suite, la
                 // passe de fin rattrapera. Le fichier ne prend jamais de retard.
                 let skip = self.polishQueue.count > 3 || Date() < self.polishPausedUntil
-                await self.polish(next, attempt: !skip)
+                await self.polish(next, attempt: !skip, session: current)
             }
-            self?.polishLoop = nil
+            if self?.session == current { self?.polishLoop = nil }
         }
     }
 
-    private func polish(_ p: MeetingParagraph, attempt: Bool) async {
+    private func polish(_ p: MeetingParagraph, attempt: Bool, session current: UUID) async {
         var p = p
         if attempt {
             let vocabulary = VocabularyStore.shared.snapshot
-            if let out = await Polisher.polish(p.raw, language: Prefs.shared.effectiveLanguage, spelling: vocabulary.spellingList) {
+            let out = await Polisher.polish(p.raw, language: Prefs.shared.effectiveLanguage, spelling: vocabulary.spellingList)
+            guard current == session else { return }
+            if let out {
                 p.text = vocabulary.apply(to: out)
                 p.polished = true
             } else {
@@ -515,6 +530,15 @@ final class MeetingRecorder: ObservableObject {
         }
 
         guard let folder, var meta else { reset(); return }
+        // Démarrage raté : moins de 10 s et rien d'écrit → rien à garder.
+        if paragraphs.isEmpty && elapsed < 10 {
+            transcript?.finish(meta: meta, paragraphs: [])
+            try? FileManager.default.trashItem(at: folder.url, resultingItemURL: nil)
+            Log.info("réunion vide de moins de 10 s : dossier à la Corbeille")
+            reset()
+            onFailure?(L("Réunion trop courte : rien n'a été gardé", "Meeting too short: nothing was kept"))
+            return
+        }
         meta.recording = false
         meta.endedAt = Date()
         meta.duration = max(mic?.seconds ?? 0, system?.seconds ?? 0, elapsed)
