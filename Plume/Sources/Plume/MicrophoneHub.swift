@@ -38,11 +38,6 @@ final class MicrophoneHub: @unchecked Sendable {
     private var zeroSince: TimeInterval?
     private var zeroReported = false
 
-    var isRunning: Bool {
-        lock.lock(); defer { lock.unlock() }
-        return engine != nil
-    }
-
     /// S'abonne au micro (l'ouvre s'il ne l'est pas). À appeler sur le fil principal.
     func subscribe(_ handler: @escaping Handler) throws -> UUID {
         let id = UUID()
