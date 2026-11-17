@@ -295,14 +295,28 @@ struct MeetingWidgetView: View {
     }
 }
 
-/// Le fond sombre de l'orbe, de l'anneau et des messages (comme la pastille).
-private struct DarkCapsule: ViewModifier {
+/// Le fond de la pastille de dictée, repris tel quel de `PillView.pillBackground`
+/// (`PillPanel.swift`) : verre dépoli du système, voile qui suit le thème, deux
+/// filets et deux ombres. La forme est passée par l'appelant — capsule pour
+/// l'orbe et les messages, cercle pour l'anneau, rectangle arrondi 16 pour la
+/// carte de fin — pour que toutes les tailles du widget aient exactement le
+/// même fond que la pastille, en clair comme en sombre.
+private struct PillBackground<S: Shape>: ViewModifier {
+    let shape: S
+    @Environment(\.colorScheme) private var colorScheme
+    private var isDark: Bool { colorScheme == .dark }
+
     func body(content: Content) -> some View {
         content
-            .background(Capsule().fill(Color.black.opacity(0.88)))
-            .overlay(Capsule().strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
-            .shadow(color: .black.opacity(0.25), radius: 6, y: 2)
-            .environment(\.colorScheme, .dark)
+            .background(
+                shape
+                    .fill(.ultraThinMaterial)
+                    .overlay(shape.fill(isDark ? Color.black.opacity(0.34) : Color.white.opacity(0.30)))
+                    .overlay(shape.stroke(Color.white.opacity(isDark ? 0.20 : 0.55), lineWidth: 0.75))
+                    .overlay(shape.stroke(Color.black.opacity(isDark ? 0.28 : 0.10), lineWidth: 0.5).padding(0.5))
+                    .shadow(color: .black.opacity(isDark ? 0.42 : 0.22), radius: 14, y: 5)
+                    .shadow(color: .black.opacity(0.10), radius: 2, y: 1)
+            )
     }
 }
 
@@ -310,18 +324,17 @@ private struct HoldRing: View {
     let progress: Double
     var body: some View {
         ZStack {
-            Circle().fill(Color.black.opacity(0.88))
-            Circle().stroke(Color.white.opacity(0.15), lineWidth: 4).padding(8)
+            Circle().stroke(Color.primary.opacity(0.15), lineWidth: 4).padding(8)
             Circle().trim(from: 0, to: progress)
                 .stroke(Color.red, style: StrokeStyle(lineWidth: 4, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .padding(8)
             Image(systemName: "person.2.wave.2.fill")
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
         }
         .frame(width: MeetingWidgetModel.ringSize.width, height: MeetingWidgetModel.ringSize.height)
-        .shadow(color: .black.opacity(0.25), radius: 6, y: 2)
+        .modifier(PillBackground(shape: Circle()))
     }
 }
 
@@ -376,8 +389,8 @@ private struct Meter: View {
 }
 
 private struct Meters: View {
-    /// Blanc sur l'orbe sombre, gris sur la feuille blanche.
-    var color: Color = .white.opacity(0.9)
+    /// Primaire sur l'orbe (comme le texte de la pastille), secondaire sur la feuille blanche.
+    var color: Color = .primary.opacity(0.9)
     @EnvironmentObject var recorder: MeetingRecorder
     @EnvironmentObject var levels: MeetingLevels
 
@@ -404,7 +417,7 @@ private struct IconButton: View {
             Image(systemName: symbol)
                 .font(.system(size: 10, weight: .bold))
                 .frame(width: 22, height: 22)
-                .background(Circle().fill(Color.white.opacity(0.14)))
+                .background(Circle().fill(Color.primary.opacity(0.14)))
         }
         .buttonStyle(.plain)
         .help(help)
@@ -435,10 +448,10 @@ private struct MeetingOrb: View {
                 MeetingWidgetController.shared.discardTapped()
             }
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(.primary)
         .padding(.horizontal, 12)
         .frame(width: MeetingWidgetModel.orbSize.width, height: MeetingWidgetModel.orbSize.height)
-        .modifier(DarkCapsule())
+        .modifier(PillBackground(shape: Capsule()))
     }
 }
 
@@ -448,9 +461,9 @@ private struct FinishingOrb: View {
             ProgressView().controlSize(.small)
             Text(L("Finalisation…", "Finishing…")).font(.system(size: 13, weight: .medium))
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(.primary)
         .frame(width: MeetingWidgetModel.orbSize.width, height: MeetingWidgetModel.orbSize.height)
-        .modifier(DarkCapsule())
+        .modifier(PillBackground(shape: Capsule()))
     }
 }
 
@@ -470,10 +483,10 @@ private struct DiscardConfirmation: View {
         }
         .buttonStyle(.plain)
         .font(.system(size: 12, weight: .medium))
-        .foregroundStyle(.white)
+        .foregroundStyle(.primary)
         .padding(.horizontal, 14)
         .frame(width: MeetingWidgetModel.orbSize.width, height: MeetingWidgetModel.orbSize.height)
-        .modifier(DarkCapsule())
+        .modifier(PillBackground(shape: Capsule()))
         .help(L("Elle part dans la Corbeille, avec son texte et son audio.", "It goes to the Trash, with its text and audio."))
     }
 }
@@ -587,7 +600,7 @@ private struct EndedCard: View {
                     Text([model.ended?.summary, model.ended?.reason].compactMap { $0 }.filter { !$0.isEmpty }
                         .joined(separator: " · "))
                         .font(.system(size: 11))
-                        .foregroundStyle(.white.opacity(0.7))
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
                 Spacer(minLength: 0)
@@ -596,19 +609,16 @@ private struct EndedCard: View {
             HStack(spacing: 8) {
                 Label(L("Copié", "Copied"), systemImage: "checkmark")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(.secondary)
                 Spacer(minLength: 0)
                 CardButton(title: L("Ouvrir", "Open")) { MeetingWidgetController.shared.openMeetings() }
                 CardButton(title: L("Coller", "Paste")) { MeetingWidgetController.shared.paste() }
             }
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(.primary)
         .padding(14)
         .frame(width: MeetingWidgetModel.endedSize.width, height: MeetingWidgetModel.endedSize.height)
-        .background(RoundedRectangle(cornerRadius: 16).fill(Color.black.opacity(0.88)))
-        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color.white.opacity(0.12), lineWidth: 1))
-        .shadow(color: .black.opacity(0.25), radius: 6, y: 2)
-        .environment(\.colorScheme, .dark)
+        .modifier(PillBackground(shape: RoundedRectangle(cornerRadius: 16, style: .continuous)))
         .onHover { if $0 { MeetingWidgetController.shared.keepEndedOpen() } }
     }
 }
@@ -620,7 +630,7 @@ private struct CardButton: View {
         Button(action: action) {
             Text(title).font(.system(size: 12, weight: .semibold))
                 .padding(.horizontal, 12).padding(.vertical, 5)
-                .background(Capsule().fill(Color.white.opacity(0.16)))
+                .background(Capsule().fill(Color.primary.opacity(0.16)))
         }
         .buttonStyle(.plain)
     }
@@ -631,10 +641,10 @@ private struct MessageCapsule: View {
     var body: some View {
         Text(text)
             .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(.white)
+            .foregroundStyle(.primary)
             .lineLimit(1)
             .padding(.horizontal, 16)
             .frame(width: MeetingWidgetModel.messageSize.width, height: MeetingWidgetModel.messageSize.height)
-            .modifier(DarkCapsule())
+            .modifier(PillBackground(shape: Capsule()))
     }
 }
