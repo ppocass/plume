@@ -152,10 +152,12 @@ enum MeetingFiles {
         let date = DateFormatter.localizedString(from: meta.startedAt, dateStyle: .long, timeStyle: .short)
         let words = paragraphs.reduce(0) { $0 + $1.words }
         var out = "# " + L("Réunion du ", "Meeting on ") + date + "\n\n"
-        out += "- " + L("Durée", "Duration") + " : " + duration(meta.duration) + "\n"
-        out += "- Source : " + meta.source + "\n"
-        out += "- " + L("Modèle", "Model") + " : " + meta.model + "\n"
-        out += "- " + L("Mots", "Words") + " : \(words)\n\n"
+        // Deux-points à la française (espace avant) ou à l'anglaise.
+        let colon = L(" : ", ": ")
+        out += "- " + L("Durée", "Duration") + colon + duration(meta.duration) + "\n"
+        out += "- Source" + colon + meta.source + "\n"
+        out += "- " + L("Modèle", "Model") + colon + meta.model + "\n"
+        out += "- " + L("Mots", "Words") + colon + "\(words)\n\n"
         for p in paragraphs where !p.text.isEmpty {
             out += paragraphLine(p) + "\n\n"
         }
@@ -164,7 +166,7 @@ enum MeetingFiles {
 
     /// `[00:04:12] **Moi** : …` (+ « *(non nettoyé)* » si le lissage n'a pas pu passer).
     static func paragraphLine(_ p: MeetingParagraph) -> String {
-        var line = "[\(timestamp(p.start))] **\(p.speaker.label)** : \(p.text)"
+        var line = "[\(timestamp(p.start))] **\(p.speaker.label)**" + L(" : ", ": ") + p.text
         if !p.polished && Prefs.polishWanted { line += " *" + L("(non nettoyé)", "(not cleaned up)") + "*" }
         return line
     }

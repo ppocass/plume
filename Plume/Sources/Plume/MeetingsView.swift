@@ -145,7 +145,7 @@ struct MeetingsView: View {
         }
         .listStyle(.inset)
         .scrollContentBackground(.hidden)
-        .frame(width: 260)
+        .frame(width: 220)
     }
 
     @ViewBuilder private var detail: some View {
@@ -339,8 +339,11 @@ private struct MeetingDetailView: View {
                 .help(L("Mettre la réunion à la Corbeille", "Move the meeting to the Trash"))
                 .disabled(isRecordingThis)
             }
+            // Icônes seules (le texte est dans l'aide) : à la largeur normale
+            // de la fenêtre, cinq libellés se coupaient en « … ».
+            .labelStyle(.iconOnly)
             .buttonStyle(.bordered)
-            .controlSize(.small)
+            .controlSize(.regular)
         }
         .padding(.horizontal, 20)
         .padding(.top, 18)
@@ -367,24 +370,26 @@ private struct MeetingDetailView: View {
         }
     }
 
+    /// Qui et quand sur une petite ligne, le texte dessous sur toute la largeur.
     private func paragraphRow(_ p: MeetingParagraph) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(MeetingFiles.timestamp(p.start))
-                .font(.caption.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .frame(width: 64, alignment: .leading)
-            Text(p.speaker.label)
-                .font(.callout.weight(.semibold))
-                .foregroundStyle(p.speaker == .me ? Color.accentColor : Color.orange)
-                .frame(width: 44, alignment: .leading)
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 6) {
+                Text(p.speaker.label)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(p.speaker == .me ? Color.accentColor : Color.orange)
+                Text(MeetingFiles.timestamp(p.start))
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                if !p.polished && Prefs.polishWanted {
+                    Text(L("non nettoyé", "not cleaned up"))
+                        .font(.caption.italic())
+                        .foregroundStyle(.secondary)
+                }
+            }
             Text(p.text)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
-            if !p.polished && Prefs.polishWanted {
-                Text(L("non nettoyé", "not cleaned up"))
-                    .font(.caption.italic())
-                    .foregroundStyle(.secondary)
-            }
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .opacity(p.open ? 0.6 : 1)
     }
