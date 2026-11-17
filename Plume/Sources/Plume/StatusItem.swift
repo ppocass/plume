@@ -53,6 +53,23 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         copy.image = NSImage(systemSymbolName: "doc.on.doc", accessibilityDescription: nil)
         menu.addItem(copy)
 
+        // Le mode Réunion n'existe que sur macOS 14.4+ et s'il est activé.
+        if MeetingRecorder.isSupported && Prefs.shared.meetingEnabled {
+            menu.addItem(.separator())
+            let meeting = MeetingRecorder.shared.isRecording
+                ? NSMenuItem(title: L("Arrêter la réunion", "Stop Meeting"), action: #selector(toggleMeeting), keyEquivalent: "")
+                : NSMenuItem(title: L("Enregistrer une réunion", "Record a Meeting"), action: #selector(toggleMeeting), keyEquivalent: "")
+            meeting.target = self
+            meeting.image = NSImage(systemSymbolName: MeetingRecorder.shared.isRecording ? "stop.circle.fill" : "person.2.wave.2",
+                                     accessibilityDescription: nil)
+            menu.addItem(meeting)
+
+            let meetings = NSMenuItem(title: L("Réunions…", "Meetings…"), action: #selector(openMeetings), keyEquivalent: "")
+            meetings.target = self
+            meetings.image = NSImage(systemSymbolName: "list.bullet.rectangle", accessibilityDescription: nil)
+            menu.addItem(meetings)
+        }
+
         menu.addItem(.separator())
         // Chaque entrée a son icône : macOS en met d'office à certaines (Réglages,
         // Quitter), et les autres paraîtraient décalées.
@@ -73,6 +90,8 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     @objc private func toggleDictation() { DictationController.shared.toggleFromMenu() }
     @objc private func copyLatest() { DictationController.shared.copyLatest() }
     @objc private func openHistory() { MainWindowController.shared.show(section: .history) }
+    @objc private func toggleMeeting() { MeetingRecorder.shared.toggle() }
+    @objc private func openMeetings() { MainWindowController.shared.show(section: .meetings) }
     @objc private func openSettings() { MainWindowController.shared.show(section: .settings) }
 
     /// Ouvre la page de pourboire (Plume reste libre et MIT : rien n'est

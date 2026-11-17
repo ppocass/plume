@@ -118,6 +118,58 @@ struct SettingsView: View {
                      : Setup.sharedEngineNote ?? L("Fonctionne hors ligne, sur votre Mac.", "Runs offline, on your Mac."))
             }
 
+            // Le mode Réunion n'existe pas avant macOS 14.4 (pas d'audio système).
+            if MeetingRecorder.isSupported {
+                Section {
+                    Toggle(L("Mode Réunion", "Meeting mode"), isOn: $prefs.meetingEnabled)
+                    Text(L("Tenez votre touche de dictée quelques secondes : Plume écrit en direct ce que vous dites (le micro) et ce que disent les autres (le son du Mac), dans un fichier sur votre Mac. Le son ne quitte jamais votre Mac : seul le texte part au nettoyeur, et seulement s'il est activé. Au premier enregistrement, macOS demande une autorisation de plus, « audio du système ».",
+                           "Hold your dictation key for a few seconds: Plume writes down live what you say (the microphone) and what the others say (your Mac's audio), in a file on your Mac. The sound never leaves your Mac: only the text goes to the clean-up service, and only if it is turned on. The first time, macOS asks for one more permission, \"system audio\"."))
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    if prefs.meetingEnabled {
+                        LabeledContent(L("Appui long", "Long press")) {
+                            Stepper(value: $prefs.meetingHoldSeconds, in: Prefs.meetingHoldRange, step: 1) {
+                                Text(L("\(Int(prefs.meetingHoldSeconds)) s", "\(Int(prefs.meetingHoldSeconds)) s"))
+                            }
+                        }
+                        if prefs.shortcut.kind == .combo {
+                            Text(L("Avec un raccourci à plusieurs touches, l'appui long n'existe pas : démarrez la réunion depuis la barre des menus.",
+                                   "With a multi-key shortcut there is no long press: start the meeting from the menu bar."))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Picker(L("Durée maximale", "Maximum length"), selection: $prefs.meetingMaxHours) {
+                            ForEach(Prefs.meetingMaxChoices, id: \.self) { h in
+                                Text(L("\(Int(h)) h", "\(Int(h)) h")).tag(h)
+                            }
+                        }
+                        .focusable(false)
+                        Toggle(L("Garder l'audio", "Keep the audio"), isOn: $prefs.meetingKeepAudio)
+                        Text(L("Environ 115 Mo par heure et par piste. Sinon, l'audio part à la Corbeille à la fin et seul le texte reste.",
+                               "About 115 MB per hour per track. Otherwise the audio goes to the Trash at the end and only the text stays."))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Toggle(L("Prévenir si une piste est muette", "Warn if a track goes silent"), isOn: $prefs.meetingSilenceAlert)
+                        Text(L("Après une minute sans aucun son du micro ou du Mac.",
+                               "After a minute without any sound from the microphone or the Mac."))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Toggle(L("Chrono dans la barre des menus", "Timer in the menu bar"), isOn: $prefs.meetingMenuBarIndicator)
+                        Text(L("Un point rouge et la durée pendant une réunion.",
+                               "A red dot and the elapsed time during a meeting."))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Toggle(L("Visible dans les captures d'écran", "Visible in screenshots"), isOn: $prefs.meetingShowInCaptures)
+                        Text(L("Par défaut, la fenêtre de réunion n'apparaît ni dans les captures ni dans les partages d'écran.",
+                               "By default the meeting window appears neither in screenshots nor in screen sharing."))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text(L("Réunions", "Meetings"))
+                }
+            }
+
             Section(L("Autorisations", "Permissions")) {
                 PermissionRows()
                 if permissions.accessibility && !permissions.hotkeyActive {
