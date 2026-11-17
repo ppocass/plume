@@ -1,1 +1,2 @@
 "NSMicrophoneUsageDescription" = "Plume uses the microphone to turn what you say into text.";
+"NSAudioCaptureUsageDescription" = "Plume listens to the sound of your calls (only in Meeting mode, which you turn on yourself) to write down what the other people say. The sound never leaves your Mac.";

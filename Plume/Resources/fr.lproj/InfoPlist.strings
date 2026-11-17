@@ -1,1 +1,2 @@
 "NSMicrophoneUsageDescription" = "Plume utilise le micro pour transformer ce que vous dites en texte.";
+"NSAudioCaptureUsageDescription" = "Plume écoute le son de vos visios (seulement en mode Réunion, que vous activez vous-même) pour écrire ce que disent les autres. Le son ne quitte jamais votre Mac.";

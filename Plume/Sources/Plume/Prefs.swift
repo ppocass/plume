@@ -292,6 +292,42 @@ final class Prefs: ObservableObject {
     }
     static let idleChoices: [Double] = [15, 35, 60, 120, 300, 900, -1]
 
+    // MARK: Réunions
+
+    /// Le mode Réunion (désactivé par défaut ; n'existe que sur macOS 14.4+).
+    @Published var meetingEnabled: Bool {
+        didSet { defaults.set(meetingEnabled, forKey: "meetingEnabled") }
+    }
+    /// Durée de l'appui long sur la touche de dictée qui démarre/arrête une réunion (1…5 s).
+    @Published var meetingHoldSeconds: Double {
+        didSet { defaults.set(meetingHoldSeconds, forKey: "meetingHoldSeconds") }
+    }
+    static let meetingHoldRange: ClosedRange<Double> = 1...5
+    /// Arrêt automatique d'une réunion oubliée, en heures.
+    @Published var meetingMaxHours: Double {
+        didSet { defaults.set(meetingMaxHours, forKey: "meetingMaxHours") }
+    }
+    static let meetingMaxChoices: [Double] = [1, 2, 3, 4, 6, 8]
+    /// Garder les deux pistes audio à la fin (sinon : Corbeille, le texte reste).
+    @Published var meetingKeepAudio: Bool {
+        didSet { defaults.set(meetingKeepAudio, forKey: "meetingKeepAudio") }
+    }
+    /// Le widget de réunion apparaît-il dans les captures et les partages d'écran ?
+    @Published var meetingShowInCaptures: Bool {
+        didSet { defaults.set(meetingShowInCaptures, forKey: "meetingShowInCaptures") }
+    }
+    /// Pendant une réunion, l'icône de la barre des menus montre un point rouge et le chrono.
+    @Published var meetingMenuBarIndicator: Bool {
+        didSet {
+            defaults.set(meetingMenuBarIndicator, forKey: "meetingMenuBarIndicator")
+            StatusItemController.shared.update()
+        }
+    }
+    /// Prévenir quand une des deux pistes n'entend plus rien depuis une minute.
+    @Published var meetingSilenceAlert: Bool {
+        didSet { defaults.set(meetingSilenceAlert, forKey: "meetingSilenceAlert") }
+    }
+
     private init() {
         shortcut = Self.loadShortcut(defaults)
         leetEnabled = defaults.bool(forKey: "leetEnabled")
@@ -319,6 +355,13 @@ final class Prefs: ObservableObject {
         sttCustomURL = defaults.string(forKey: "sttCustomURL") ?? ""
         sttModel = defaults.string(forKey: "sttModel_\(stt.rawValue)") ?? ""
         showInMenuBar = defaults.bool(forKey: "showInMenuBar")
+        meetingEnabled = defaults.bool(forKey: "meetingEnabled")
+        meetingHoldSeconds = min(5, max(1, defaults.object(forKey: "meetingHoldSeconds") as? Double ?? 3))
+        meetingMaxHours = defaults.object(forKey: "meetingMaxHours") as? Double ?? 4
+        meetingKeepAudio = defaults.object(forKey: "meetingKeepAudio") as? Bool ?? true
+        meetingShowInCaptures = defaults.bool(forKey: "meetingShowInCaptures")
+        meetingMenuBarIndicator = defaults.object(forKey: "meetingMenuBarIndicator") as? Bool ?? true
+        meetingSilenceAlert = defaults.object(forKey: "meetingSilenceAlert") as? Bool ?? true
         engineIdle = Prefs.idleSeconds
         microphoneUID = defaults.string(forKey: "microphoneUID") ?? ""
         voiceCommands = defaults.object(forKey: "voiceCommands") as? Bool ?? true

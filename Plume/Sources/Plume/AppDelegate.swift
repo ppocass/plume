@@ -21,6 +21,16 @@ enum PlumeMain {
             Task { exit(await Updater.installTest(target)) }
             dispatchMain()
         }
+        if let i = args.firstIndex(of: "--meeting-probe"), i + 2 < args.count {
+            let seconds = Double(args[i + 1]) ?? 30
+            let folder = args[i + 2]
+            // Dans une vraie app : sans elle, macOS ne peut pas poser la question
+            // de l'autorisation et la note « refusée » d'office.
+            let app = NSApplication.shared
+            app.setActivationPolicy(.accessory)
+            Task { @MainActor in exit(await MeetingProbe.run(seconds: seconds, folder: folder)) }
+            app.run()
+        }
         if args.contains("--update-dry-run") {
             Task { exit(await Updater.dryRun()) }
             dispatchMain()
