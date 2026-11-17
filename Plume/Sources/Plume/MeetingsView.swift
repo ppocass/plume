@@ -125,6 +125,9 @@ struct MeetingsView: View {
             }
         }
         .onChange(of: library.meetings) { _, list in syncSelection(list) }
+        // Début et fin de réunion : la liste se met à jour tout de suite
+        // (sinon « En cours » resterait affiché jusqu'à la prochaine visite).
+        .onChange(of: recorder.phase) { _, _ in library.reload() }
     }
 
     private var meetingList: some View {
@@ -269,6 +272,7 @@ private struct MeetingDetailView: View {
                 }
             }
         }
+        .onChange(of: recorder.phase) { _, _ in load() }
         .confirmationDialog(L("Supprimer cette réunion ?", "Delete this meeting?"),
                             isPresented: $confirmDelete, titleVisibility: .visible) {
             Button(L("Garder", "Keep"), role: .cancel) {}
