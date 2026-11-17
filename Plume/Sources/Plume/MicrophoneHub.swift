@@ -47,7 +47,7 @@ final class MicrophoneHub: @unchecked Sendable {
     func subscribe(_ handler: @escaping Handler) throws -> UUID {
         let id = UUID()
         lock.lock()
-        let wasRunning = engine != nil
+        let wasRunning = engine != nil || testTimer != nil
         handlers[id] = handler
         lock.unlock()
         if !wasRunning {
@@ -73,6 +73,10 @@ final class MicrophoneHub: @unchecked Sendable {
     // MARK: Moteur
 
     private func startEngine() throws {
+        if let testSignal {
+            startTestSignal(testSignal)
+            return
+        }
         let engine = AVAudioEngine()
         let input = engine.inputNode
         // Micro choisi dans les réglages (sinon celui de macOS). S'il n'est
@@ -112,6 +116,8 @@ final class MicrophoneHub: @unchecked Sendable {
     }
 
     private func stopEngine() {
+        testTimer?.cancel()
+        testTimer = nil
         lock.lock()
         let engine = self.engine
         let observer = configObserver
@@ -149,6 +155,46 @@ final class MicrophoneHub: @unchecked Sendable {
                 do { try self.startEngine() } catch { Log.info("micro perdu : \(error.localizedDescription)") }
             }
         }
+    }
+
+    // MARK: Autotest
+
+    private var testSignal: [Float]?
+    private var testTimer: DispatchSourceTimer?
+
+    /// **Autotest seulement** (`--meeting-selftest` avec `PLUME_FAKE_MIC`) : le
+    /// micro est remplacé par ce son (16 kHz mono), livré en temps réel et en
+    /// boucle, par morceaux de 20 ms — exactement comme le vrai.
+    func replaceWithTestSignal(_ samples: [Float]) {
+        testSignal = samples.isEmpty ? nil : samples
+    }
+
+    private func startTestSignal(_ signal: [Float]) {
+        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "plume.mic.test", qos: .userInitiated))
+        let step = Int(AudioRecorder.sampleRate * 0.02)
+        let begin = ProcessInfo.processInfo.systemUptime
+        var position = 0
+        timer.schedule(deadline: .now(), repeating: .milliseconds(20))
+        timer.setEventHandler { [weak self] in
+            guard let self else { return }
+            // Rattrape l'horloge réelle (un minuteur peut glisser).
+            let due = Int((ProcessInfo.processInfo.systemUptime - begin) * AudioRecorder.sampleRate)
+            self.lock.lock()
+            let targets = Array(self.handlers.values)
+            self.lock.unlock()
+            while position + step <= due {
+                var chunk = [Float](repeating: 0, count: step)
+                for i in 0..<step { chunk[i] = signal[(position + i) % signal.count] }
+                position += step
+                chunk.withUnsafeBufferPointer { p in
+                    let level = MonoResampler.level(of: p)
+                    for handler in targets { handler(p, level) }
+                }
+            }
+        }
+        timer.resume()
+        testTimer = timer
+        Log.info("micro remplacé par un son de test (\(signal.count / Int(AudioRecorder.sampleRate)) s en boucle)")
     }
 
     // MARK: Fil audio

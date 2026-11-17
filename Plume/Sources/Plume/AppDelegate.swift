@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import ApplicationServices
 import SwiftUI
 
@@ -21,15 +22,10 @@ enum PlumeMain {
             Task { exit(await Updater.installTest(target)) }
             dispatchMain()
         }
-        if let i = args.firstIndex(of: "--meeting-probe"), i + 2 < args.count {
-            let seconds = Double(args[i + 1]) ?? 30
-            let folder = args[i + 2]
-            // Dans une vraie app : sans elle, macOS ne peut pas poser la question
-            // de l'autorisation et la note « refusée » d'office.
-            let app = NSApplication.shared
-            app.setActivationPolicy(.accessory)
-            Task { @MainActor in exit(await MeetingProbe.run(seconds: seconds, folder: folder)) }
-            app.run()
+        if let i = args.firstIndex(of: "--meeting-selftest"), i + 2 < args.count {
+            let seconds = Double(args[i + 1]) ?? 60
+            let report = args[i + 2]
+            MainActor.assumeIsolated { MeetingSelfTest.run(seconds: seconds, report: report) }
         }
         if args.contains("--update-dry-run") {
             Task { exit(await Updater.dryRun()) }
@@ -121,6 +117,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkey.leetShortcut = Prefs.shared.leetEnabled ? Prefs.shared.leetShortcut : nil
         hotkey.onLeetTap = { DictationController.shared.handleLeetTap() }
         if !Setup.demo { startHotkey() }
+        installMeetingMode()
 
         // Les apps Electron n'exposent leurs champs de texte qu'à la demande.
         NSWorkspace.shared.notificationCenter.addObserver(
@@ -185,6 +182,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if !Setup.demo { Updater.shared.checkAtLaunchIfNeeded() }
     }
+
+    /// Le mode Réunion : l'appui long sur la touche, le widget, et la remise en
+    /// ordre d'une réunion que l'app aurait laissée en plan (arrêt brutal).
+    private func installMeetingMode() {
+        guard MeetingRecorder.isSupported else { return }
+        MeetingWidgetController.shared.install()
+        hotkey.onLongPress = { MeetingRecorder.shared.toggle() }
+        hotkey.onHoldProgress = { MeetingWidgetController.shared.holdProgress($0) }
+        let prefs = Prefs.shared
+        prefs.$meetingEnabled.combineLatest(prefs.$meetingHoldSeconds)
+            .sink { [weak self] enabled, seconds in self?.hotkey.longPressSeconds = enabled ? seconds : 0 }
+            .store(in: &observers)
+        Task.detached(priority: .utility) { MeetingTranscript.recoverInterrupted() }
+    }
+    private var observers: Set<AnyCancellable> = []
 
     /// Le tap clavier exige l'Accessibilité : on réessaie toutes les 2 s tant
     /// qu'elle n'est pas accordée (aucune relance de l'app nécessaire).

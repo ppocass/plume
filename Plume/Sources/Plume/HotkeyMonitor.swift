@@ -25,6 +25,14 @@ import CoreGraphics
 /// à condition que rien d'autre ne soit venu s'intercaler. Rien n'est avalé :
 /// ⌘⌥+touche et ⌘⌥-clic gardent leur rôle habituel.
 ///
+/// **Appui long** (mode Réunion, touche modificatrice seulement) : la touche
+/// tenue seule `longPressSeconds` déclenche `onLongPress` **pendant** l'appui,
+/// sans attendre le relâchement. Dès 0,8 s (là où un appui cesse de compter
+/// comme un appui de dictée), `onHoldProgress` reçoit l'avancement (0…1) pour
+/// dessiner l'anneau ; `nil` = plus d'anneau. Une autre touche, un clic ou un
+/// autre modificateur annule. Le relâchement qui suit ne déclenche rien : au-delà
+/// de 0,8 s, ce n'est déjà plus un appui de dictée.
+///
 /// Le tap exige l'autorisation **Accessibilité**. Sans elle, `start()` échoue
 /// et l'app réessaie toutes les 2 s (dès que la case est cochée, ça marche,
 /// sans relancer).
@@ -39,6 +47,12 @@ final class HotkeyMonitor {
     var paused = false
     /// Appelé sur le fil principal à chaque appui valide.
     var onTap: (() -> Void)?
+    /// Durée de l'appui long (0 = pas d'appui long : comportement d'avant).
+    var longPressSeconds: TimeInterval = 0
+    var onLongPress: (() -> Void)?
+    var onHoldProgress: ((Double?) -> Void)?
+    private var holdTimer: Timer?
+    private var holdShown = false
 
     private var tap: CFMachPort?
     private var source: CFRunLoopSource?
@@ -100,12 +114,13 @@ final class HotkeyMonitor {
             // macOS coupe un tap qu'il juge trop lent : on le rallume.
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
             downAt = nil
+            cancelHold()
             leetHeld = false
             leetStart = nil
             return false
         default: break
         }
-        if paused { downAt = nil; leetHeld = false; leetStart = nil; return false }
+        if paused { downAt = nil; leetHeld = false; leetStart = nil; cancelHold(); return false }
         let code = event.getIntegerValueField(.keyboardEventKeycode)
 
         // Le couple ⌘ gauche + ⌥ gauche s'évalue AVANT le raccourci de dictée
@@ -163,22 +178,25 @@ final class HotkeyMonitor {
                 if shortcut.isDown(flags) {
                     downAt = ProcessInfo.processInfo.systemUptime
                     dirty = shortcut.otherModifiersHeld(flags)
+                    if !dirty { startHold() }
                 } else if let start = downAt {
                     let held = ProcessInfo.processInfo.systemUptime - start
                     downAt = nil
+                    cancelHold()
                     if !dirty && held < Self.maxTapDuration {
                         fireDictation = true
                     }
                 }
             } else if downAt != nil {
                 dirty = true
+                cancelHold()
             }
         case .keyUp:
             break
         default:
             // Une touche, un clic ou un défilement pendant l'appui : ce n'était
             // pas un appui « seul ».
-            if downAt != nil { dirty = true }
+            if downAt != nil { dirty = true; cancelHold() }
         }
 
         // Un vrai appui de dictée prime sur le couple : on n'envoie qu'un geste.
@@ -189,5 +207,44 @@ final class HotkeyMonitor {
             DispatchQueue.main.async { [weak self] in self?.onLeetTap?() }
         }
         return false
+    }
+
+    // MARK: Appui long
+
+    /// L'anneau n'apparaît qu'à partir d'ici : avant, c'est peut-être un appui de dictée.
+    static let holdRingDelay: TimeInterval = 0.8
+
+    private func startHold() {
+        cancelHold()
+        guard longPressSeconds > 0, onLongPress != nil else { return }
+        let timer = Timer(timeInterval: 1.0 / 30, repeats: true) { [weak self] _ in self?.holdTick() }
+        RunLoop.main.add(timer, forMode: .common)
+        holdTimer = timer
+    }
+
+    private func holdTick() {
+        guard let start = downAt, !dirty else { cancelHold(); return }
+        let held = ProcessInfo.processInfo.systemUptime - start
+        let total = max(longPressSeconds, Self.holdRingDelay + 0.1)
+        if held >= total {
+            cancelHold()
+            // Le relâchement à venir ne doit rien déclencher (il ne le ferait
+            // pas : au-delà de 0,8 s, un appui n'est plus un appui de dictée).
+            dirty = true
+            Log.info("appui long : mode Réunion")
+            onLongPress?()
+        } else if held >= Self.holdRingDelay {
+            holdShown = true
+            onHoldProgress?((held - Self.holdRingDelay) / (total - Self.holdRingDelay))
+        }
+    }
+
+    private func cancelHold() {
+        holdTimer?.invalidate()
+        holdTimer = nil
+        if holdShown {
+            holdShown = false
+            onHoldProgress?(nil)
+        }
     }
 }

@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 
 /// L'icône facultative de la barre des menus (Réglages → Général, désactivée
 /// par défaut) : démarrer ou terminer une dictée, copier la dernière, ouvrir
@@ -8,9 +9,11 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     static let shared = StatusItemController()
     private var item: NSStatusItem?
 
-    /// Montre ou retire l'icône selon le réglage.
+    /// Montre ou retire l'icône selon le réglage (et pendant une réunion,
+    /// si le chrono de réunion est demandé).
     func update() {
-        if Prefs.shared.showInMenuBar {
+        updateMeetingIndicator()
+        if Prefs.shared.showInMenuBar || showsMeeting {
             guard item == nil else { return }
             let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
             item.button?.image = Self.icon
@@ -85,6 +88,57 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         let quit = NSMenuItem(title: L("Quitter Plume", "Quit Plume"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "")
         quit.image = NSImage(systemSymbolName: "xmark.rectangle", accessibilityDescription: nil)
         menu.addItem(quit)
+    }
+
+    // MARK: Chrono de réunion
+
+    private var meetingTimer: Timer?
+    private var meetingObserver: AnyCancellable?
+
+    private var showsMeeting: Bool {
+        MeetingRecorder.shared.isRecording && Prefs.shared.meetingMenuBarIndicator
+    }
+
+    /// Suit l'enregistreur (branché au premier appel).
+    private func updateMeetingIndicator() {
+        if meetingObserver == nil, MeetingRecorder.isSupported {
+            meetingObserver = MeetingRecorder.shared.$phase.removeDuplicates().dropFirst()
+                .sink { [weak self] _ in DispatchQueue.main.async { self?.update() } }
+        }
+        if showsMeeting {
+            if meetingTimer == nil {
+                let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.drawMeetingTitle() }
+                }
+                RunLoop.main.add(timer, forMode: .common)
+                meetingTimer = timer
+            }
+        } else {
+            meetingTimer?.invalidate()
+            meetingTimer = nil
+        }
+        DispatchQueue.main.async { [weak self] in self?.drawMeetingTitle() }
+    }
+
+    /// « ● 12:34 » à côté de la plume pendant une réunion ; rien sinon.
+    private func drawMeetingTitle() {
+        guard let button = item?.button else { return }
+        guard showsMeeting else {
+            button.attributedTitle = NSAttributedString()
+            button.imagePosition = .imageOnly
+            item?.length = NSStatusItem.squareLength
+            return
+        }
+        let seconds = Int(MeetingRecorder.shared.elapsed)
+        let time = seconds >= 3600
+            ? String(format: " %d:%02d:%02d", seconds / 3600, (seconds / 60) % 60, seconds % 60)
+            : String(format: " %d:%02d", seconds / 60, seconds % 60)
+        let title = NSMutableAttributedString(string: " ●", attributes: [.foregroundColor: NSColor.systemRed])
+        title.append(NSAttributedString(string: time, attributes: [
+            .font: NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)]))
+        item?.length = NSStatusItem.variableLength
+        button.imagePosition = .imageLeading
+        button.attributedTitle = title
     }
 
     @objc private func toggleDictation() { DictationController.shared.toggleFromMenu() }
