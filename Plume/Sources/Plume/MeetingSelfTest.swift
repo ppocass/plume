@@ -36,7 +36,7 @@ enum MeetingSelfTest {
             let lags = recorder.textLags
             let meta = folder.readMeta()
             write([
-                "folder": folder.url.path, "reason": String(describing: reason),
+                "folder": folder.url.path, "reason": String(describing: reason), "source": meta?.source ?? "",
                 "duration": meta?.duration ?? 0, "paragraphs": meta?.paragraphs ?? 0, "words": meta?.words ?? 0,
                 "polished": folder.readParagraphs().filter(\.polished).count,
                 "lagMean": lags.isEmpty ? 0 : lags.reduce(0, +) / Double(lags.count),
@@ -56,12 +56,24 @@ enum MeetingSelfTest {
            let data = FileManager.default.contents(atPath: path), let signal = SpeechGate.readWav(data) {
             MicrophoneHub.shared.replaceWithTestSignal(signal)
         }
+        // Cas limites, sans toucher au vrai disque ni à une vraie visio :
+        // `PLUME_MEETING_MIN_FREE_GB` relève le seuil du disque,
+        // `PLUME_TEST_MEETING_APP` fait passer une app (QuickTime…) pour une visio.
+        let env = ProcessInfo.processInfo.environment
+        if let gb = env["PLUME_MEETING_MIN_FREE_GB"].flatMap(Double.init) {
+            MeetingRecorder.minFreeBytes = Int64(gb * 1_000_000_000)
+        }
+        if #available(macOS 14.4, *), let prefix = env["PLUME_TEST_MEETING_APP"] {
+            SystemAudioTap.testMeetingApp = (prefix, "Test")
+        }
         recorder.start()
         Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { timer in
             MainActor.assumeIsolated {
                 let t = Date().timeIntervalSince(started)
                 samples.append(["t": t, "rssMB": residentMB(), "cpu": cpuSeconds() - cpuStart,
-                                "lines": Double(recorder.lines.count)])
+                                "lines": Double(recorder.lines.count),
+                                "micSilent": recorder.warnings.contains(.micSilent) ? 1 : 0,
+                                "systemSilent": recorder.warnings.contains(.systemSilent) ? 1 : 0])
                 write([:])
                 if t >= seconds, recorder.phase == .recording {
                     timer.invalidate()

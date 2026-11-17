@@ -86,7 +86,8 @@ final class MeetingRecorder: ObservableObject {
 
     static let paragraphPause: Double = 1.5
     static let maxParagraphSeconds: Double = 30
-    static let minFreeBytes: Int64 = 2_000_000_000
+    /// Sous ce seuil d'espace libre, la réunion s'arrête (variable pour l'autotest).
+    static var minFreeBytes: Int64 = 2_000_000_000
     static let silentWarningSeconds: Double = 60
     /// Une ligne de plus que ce que le widget peut montrer : la fenêtre complète est la page Réunions.
     static let maxLiveLines = 40
@@ -115,6 +116,7 @@ final class MeetingRecorder: ObservableObject {
     /// Tous les paragraphes terminés (texte seulement : 2 h ≈ 150 Ko).
     private var paragraphs: [MeetingParagraph] = []
     private var lastMetaWrite = Date.distantPast
+    private var ticks = 0
     private var echoesDropped = 0
     /// Horloge commune (secondes depuis le démarrage du Mac) au début de la réunion.
     private var clock: TimeInterval = 0
@@ -160,6 +162,7 @@ final class MeetingRecorder: ObservableObject {
             return
         }
         phase = .starting
+        ticks = 0
         warnings = []
         lines = []
         paragraphs = []
@@ -309,7 +312,9 @@ final class MeetingRecorder: ObservableObject {
         if #available(macOS 14.4, *), let tap = tapBox as? SystemAudioTap, !tap.targetIsAlive {
             stop(reason: .appClosed); return
         }
-        if Int(seconds * 4) % 120 == 0, let free = freeBytes(), free < Self.minFreeBytes {
+        ticks += 1
+        // Le disque : au premier passage, puis toutes les 30 s.
+        if ticks % 120 == 1, let free = freeBytes(), free < Self.minFreeBytes {
             stop(reason: .diskFull); return
         }
         var w: Set<Warning> = []
