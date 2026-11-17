@@ -76,6 +76,12 @@ enum UnitTests {
         leet()
         leetShortcuts()
         onboardingFlag()
+        meetingSegmenter()
+        meetingFolderName()
+        meetingParagraphJournal()
+        meetingMarkdown()
+        meetingWavAndRecovery()
+        meetingEchoAndLevels()
         print("\(passed) vérifications réussies, \(failures) échec(s)")
         return Int32(failures)
     }
@@ -373,5 +379,195 @@ enum UnitTests {
     static func filter() {
         check(TranscriptFilter.clean("Sous-titrage Société Radio-Canada", audioSeconds: 3).isEmpty, "générique retiré")
         check(TranscriptFilter.clean("Bonjour\nBonjour\nça va", audioSeconds: 3) == "Bonjour ça va", "segment répété retiré")
+    }
+
+    // MARK: Réunion
+
+    /// Une « voix » de test : une sinusoïde à 220 Hz, 16 kHz comme les pistes.
+    private static func meetingSine(_ seconds: Double, amplitude: Float = 0.2) -> [Float] {
+        let count = Int(seconds * AudioRecorder.sampleRate)
+        return (0..<count).map {
+            Float(sin(2 * Double.pi * 220 * Double($0) / AudioRecorder.sampleRate)) * amplitude
+        }
+    }
+
+    private static func meetingSilence(_ seconds: Double) -> [Float] {
+        [Float](repeating: 0, count: Int(seconds * AudioRecorder.sampleRate))
+    }
+
+    /// Les quatre octets little-endian d'un en-tête WAV.
+    private static func meetingLE32(_ data: Data, at offset: Int) -> UInt32? {
+        guard data.count >= offset + 4 else { return nil }
+        let bytes = [UInt8](data[offset..<(offset + 4)])
+        return UInt32(bytes[0]) | UInt32(bytes[1]) << 8 | UInt32(bytes[2]) << 16 | UInt32(bytes[3]) << 24
+    }
+
+    /// Le découpage d'une piste : un paragraphe s'arrête sur une pause, jamais
+    /// au milieu d'un mot, et 2 s sans respirer forcent la coupe.
+    static func meetingSegmenter() {
+        // 0,8 s : trop court, on attend encore.
+        check(MeetingSegmenter.cut(meetingSine(0.8)) == nil, "0,8 s de voix → pas de coupe")
+
+        // 1,5 s de voix puis 0,3 s de silence : la coupe tombe dans le silence.
+        let tail = meetingSine(1.5) + meetingSilence(0.3)
+        let tailCut = MeetingSegmenter.cut(tail)
+        check(tailCut != nil && Double(tailCut!) > 1.5 * 16000 && Double(tailCut!) <= 1.8 * 16000,
+              "coupe dans le silence final (\(tailCut.map(String.init) ?? "nil"))")
+
+        // 2,4 s de voix avec un quasi-silence à 1,4-1,7 s : on coupe dedans,
+        // pas au hasard dans les 0,25 s les plus calmes.
+        let withPause = meetingSine(1.4) + meetingSine(0.3, amplitude: 0.001) + meetingSine(0.7)
+        let pauseCut = MeetingSegmenter.cut(withPause)
+        check(pauseCut != nil && Double(pauseCut!) >= 1.4 * 16000 && Double(pauseCut!) <= 1.7 * 16000,
+              "coupe dans le quasi-silence (\(pauseCut.map(String.init) ?? "nil"))")
+
+        // 2,4 s de voix sans aucune pause : coupe forcée entre 1 et 2 s.
+        let forcedCut = MeetingSegmenter.cut(meetingSine(2.4))
+        check(forcedCut != nil && Double(forcedCut!) >= 16000 && Double(forcedCut!) <= 32000,
+              "coupe forcée sans pause (\(forcedCut.map(String.init) ?? "nil"))")
+
+        // 1,2 s de silence pur : c'est un morceau silencieux, pas « on attend ».
+        check(MeetingSegmenter.cut(meetingSilence(1.2)) != nil, "1,2 s de silence → coupe quand même")
+    }
+
+    /// Le nom d'un dossier de réunion : daté, et sans caractère interdit.
+    static func meetingFolderName() {
+        guard let date = Calendar.current.date(from: DateComponents(year: 2026, month: 10, day: 22, hour: 15, minute: 4))
+        else { check(false, "date de test construite"); return }
+
+        let zoom = MeetingFolder.folderName(date: date, source: "Zoom")
+        check(zoom == "2026-10-22 15h04 — Zoom", "nom daté avec la source (\(zoom))")
+
+        // « a/b:c » ne doit pas pouvoir sortir du dossier ni casser un chemin.
+        let cleaned = MeetingFolder.folderName(date: date, source: "a/b:c")
+        let suffix = cleaned.components(separatedBy: " — ").last ?? cleaned
+        check(!suffix.contains("/") && !suffix.contains(":"), "caractères interdits retirés (\(suffix))")
+
+        check(MeetingFolder.folderName(date: date, source: "") == "2026-10-22 15h04", "sans source : la date seule")
+    }
+
+    /// Le journal d'une réunion : la dernière version d'un paragraphe gagne,
+    /// et une ligne illisible n'emporte pas les autres.
+    static func meetingParagraphJournal() {
+        let dir = tempFolder()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let folder = MeetingFolder(url: dir)
+
+        let brute = MeetingParagraph(id: 1, speaker: .them, start: 5, end: 8,
+                                     raw: "brut un", text: "brut un", polished: false)
+        let autre = MeetingParagraph(id: 2, speaker: .me, start: 2, end: 4,
+                                     raw: "brut deux", text: "brut deux", polished: false)
+        let lisse = MeetingParagraph(id: 1, speaker: .them, start: 5, end: 8,
+                                     raw: "brut un", text: "version lissée", polished: true)
+        var journal = ""
+        for p in [brute, autre, lisse] {
+            guard let line = try? MeetingFiles.encoder.encode(p) else { check(false, "paragraphe encodé"); return }
+            journal += String(decoding: line, as: UTF8.self) + "\n"
+        }
+        try? Data(journal.utf8).write(to: folder.paragraphsURL)
+
+        let read = folder.readParagraphs()
+        check(read.count == 2, "deux paragraphes relus (\(read.count))")
+        // Le plus tôt d'abord : l'ordre du temps, pas celui des écritures.
+        check(read.first?.id == 2, "ordre du temps : le plus tôt d'abord")
+        let one = read.first { $0.id == 1 }
+        check(one?.polished == true && one?.text == "version lissée", "la version lissée remplace le brut")
+
+        // Une ligne cassée au milieu : ignorée, les autres restent.
+        var lines = journal.components(separatedBy: "\n").filter { !$0.isEmpty }
+        lines.insert("{not json", at: 1)
+        try? Data((lines.joined(separator: "\n") + "\n").utf8).write(to: folder.paragraphsURL)
+        let afterBreak = folder.readParagraphs()
+        check(afterBreak.count == 2 && afterBreak.first { $0.id == 1 }?.polished == true,
+              "ligne illisible ignorée, les autres gardées")
+    }
+
+    /// Le Markdown d'une réunion : horodatage, qui parle, et le mot qui
+    /// prévient que le texte n'est pas lissé.
+    static func meetingMarkdown() {
+        let start = Date(timeIntervalSince1970: 1_790_000_000)
+        let meta = MeetingMeta(startedAt: start, endedAt: start.addingTimeInterval(90), duration: 90,
+                               source: "Zoom", model: "parakeet-ultra", words: 2, paragraphs: 2, recording: false)
+        let lisse = MeetingParagraph(id: 1, speaker: .them, start: 65.4, end: 70,
+                                     raw: "bonjour", text: "bonjour", polished: true)
+        let brut = MeetingParagraph(id: 2, speaker: .me, start: 70, end: 72,
+                                    raw: "salut", text: "salut", polished: false)
+        let text = MeetingFiles.markdown(meta: meta, paragraphs: [lisse, brut])
+        check(text.contains("[00:01:05]"), "horodatage du paragraphe")
+        check(text.contains("**" + MeetingSpeaker.me.label + "**"), "qui parle, en gras")
+
+        // Le réglage du nettoyage est celui de la personne : on lit, on ne pose rien.
+        let marker = L("(non nettoyé)", "(not cleaned up)")
+        if Prefs.polishWanted {
+            check(text.contains(marker), "non lissé signalé quand le nettoyage est demandé")
+        } else {
+            check(!text.contains(marker), "aucun avertissement quand le nettoyage est coupé")
+        }
+
+        check(MeetingFiles.duration(42) == "42 s", "durée en secondes")
+        check(MeetingFiles.duration(125) == "2 min", "durée en minutes")
+        check(MeetingFiles.duration(3900) == "1 h 05", "durée en heures")
+        check(MeetingFiles.timestamp(3725) == "01:02:05", "horodatage 1 h 02 min 05 s")
+    }
+
+    /// Le WAV d'une piste et la réparation d'un enregistrement interrompu :
+    /// l'en-tête revient à sa taille réelle, sans rien jeter.
+    static func meetingWavAndRecovery() {
+        let dir = tempFolder()
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let samples = meetingSine(1.0)
+        let url = dir.appendingPathComponent("moi.wav")
+        guard let writer = try? WavFileWriter(url: url) else { check(false, "WAV créé"); return }
+        samples.withUnsafeBufferPointer { writer.append($0) }
+        writer.close()
+
+        let data = (try? Data(contentsOf: url)) ?? Data()
+        check(data.count == 44 + 32000, "taille du WAV : 44 + 32000 octets (\(data.count))")
+        check(meetingLE32(data, at: 40) == 32000, "en-tête : 32000 octets de données")
+
+        // Relu au milieu : les échantillons d'origine, au millième près.
+        let reread = WavFileWriter.read(url, from: 8000, count: 100)
+        check(reread.count == 100 && zip(reread, samples[8000..<8100]).allSatisfy { abs($0 - $1) < 0.001 },
+              "100 échantillons relus au bon endroit")
+
+        // App arrêtée net : l'en-tête dit 0 octet de données, le fichier en a 3200.
+        let crashed = dir.appendingPathComponent("eux.wav")
+        try? (WavFileWriter.header(dataBytes: 0) + Data(count: 3200)).write(to: crashed)
+        let seconds = MeetingTranscript.repairWavHeader(crashed) ?? -1
+        check(abs(seconds - 0.1) < 0.0001, "durée réparée : 0,1 s (\(seconds))")
+        let repaired = (try? Data(contentsOf: crashed)) ?? Data()
+        check(meetingLE32(repaired, at: 40) == 3200, "en-tête réparé : 3200 octets")
+
+        // Une réunion restée ouverte : son journal se relit, ses pistes se
+        // réparent. On n'appelle pas `recoverInterrupted` : il balaie le vrai
+        // dossier des réunions, pas un dossier de test.
+        let interrupted = dir.appendingPathComponent("2026-10-22 15h04 — Zoom", isDirectory: true)
+        try? FileManager.default.createDirectory(at: interrupted, withIntermediateDirectories: true)
+        let folder = MeetingFolder(url: interrupted)
+        let open = MeetingParagraph(id: 1, speaker: .me, start: 0, end: 1.2,
+                                    raw: "bonjour", text: "bonjour", polished: false, open: true)
+        if let line = try? MeetingFiles.encoder.encode(open) {
+            try? Data(line + Data([UInt8(ascii: "\n")])).write(to: folder.paragraphsURL)
+        } else {
+            check(false, "paragraphe ouvert encodé")
+        }
+        try? FileManager.default.copyItem(at: crashed, to: folder.micURL)
+        let rereadMeeting = folder.readParagraphs()
+        check(rereadMeeting.count == 1 && rereadMeeting.first?.open == true, "réunion interrompue : le journal se relit")
+        check(abs((MeetingTranscript.repairWavHeader(folder.micURL) ?? -1) - 0.1) < 0.0001,
+              "réunion interrompue : la piste se répare")
+    }
+
+    /// L'anti-écho et les vumètres : sans mots normalisés, le micro qui
+    /// réentend les haut-parleurs doublerait chaque phrase.
+    static func meetingEchoAndLevels() {
+        let words = MeetingRecorder.wordSet("Bonjour, c'est Pierre !")
+        check(words.contains("bonjour") && words.contains("pierre"), "mots normalisés (sans casse ni accent)")
+        check(words.count == 4, "quatre mots : bonjour, c, est, pierre (\(words.sorted()))")
+
+        check(MeetingLevels.bars(0) == 0, "niveau nul : aucune barre")
+        check(MeetingLevels.bars(1) == MeetingLevels.bars, "niveau plein : toutes les barres")
+        check(MeetingLevels.bars(0.5) == 3, "niveau moyen : trois barres")
     }
 }
