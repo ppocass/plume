@@ -14,6 +14,17 @@ struct ReleaseNotes {
     let pages: [Page]
 
     static let all: [ReleaseNotes] = [
+        ReleaseNotes(version: "1.6", pages: [
+            Page(symbol: "person.2.wave.2", titleFR: "Mode Réunion", titleEN: "Meeting mode",
+                 textFR: "Pour les visios : Plume écrit en direct ce que vous dites et ce que disent les autres, dans un fichier sur votre Mac. Activez-le dans Réglages → Réunions, puis tenez votre touche de dictée 3 secondes pour démarrer ou arrêter.",
+                 textEN: "For video calls: Plume writes down live what you say and what the others say, in a file on your Mac. Turn it on in Settings → Meetings, then hold your dictation key for 3 seconds to start or stop."),
+            Page(symbol: "lock.shield", titleFR: "Le son reste sur votre Mac", titleEN: "The sound stays on your Mac",
+                 textFR: "Deux pistes (« Moi » et « Eux »), transcrites par un modèle local. macOS demandera une autorisation de plus, « audio du système », au premier enregistrement. La fenêtre n'apparaît ni dans les captures ni dans le partage d'écran.",
+                 textEN: "Two tracks (“Me” and “Them”), transcribed by a local model. macOS will ask for one more permission, “system audio”, the first time. The window shows up neither in screenshots nor in screen sharing."),
+            Page(symbol: "doc.text", titleFR: "Page Réunions", titleEN: "Meetings page",
+                 textFR: "Chaque réunion est un fichier texte, écrit au fil de l'eau : rien ne se perd si l'app plante. Relisez, copiez, exportez, ou gardez le texte seulement.",
+                 textEN: "Each meeting is a text file written as you go, so nothing is lost if the app crashes. Read it, copy it, export it, or keep the text only."),
+        ]),
         ReleaseNotes(version: "1.5", pages: [
             Page(symbol: "textformat.alt", titleFR: "Dictée 1337", titleEN: "1337 dictation",
                  textFR: "Dictez normalement, puis terminez avec votre raccourci 1337 : ce texte part en leet speak. Un onglet 1337 permet aussi de convertir du texte déjà écrit.",

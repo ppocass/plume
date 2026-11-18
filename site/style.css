@@ -174,3 +174,19 @@ footer { text-align: center; color: var(--muted); padding: 24px 16px 40px; borde
 .leet-points strong { color: var(--text); font-weight: 600; }
 
 @media (prefers-color-scheme: dark) { .leet-out { color: #8B93FF; } }
+
+/* --- Réunion --- */
+.meet { padding: 8px 0 8px; max-width: 720px; margin: 0 auto; }
+.meet .lead { color: var(--muted); margin: 0 0 26px; font-size: 1.05rem; }
+.meet-demo {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 20px;
+  padding: 22px 28px; display: flex; flex-direction: column; gap: 12px;
+}
+.meet-line { display: grid; grid-template-columns: auto auto 1fr; gap: 12px; align-items: baseline; line-height: 1.5; }
+.meet-time { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace; font-size: 0.8rem; color: var(--muted); }
+.meet-who { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; color: #4F46E5; min-width: 3.2em; }
+.meet-who.them { color: var(--muted); }
+.meet-text { color: var(--text); }
+.meet .leet-points .fine { font-size: 0.9rem; }
+@media (prefers-color-scheme: dark) { .meet-who:not(.them) { color: #8B93FF; } }
+@media (max-width: 520px) { .meet-line { grid-template-columns: auto 1fr; } .meet-text { grid-column: 1 / -1; } }

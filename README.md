@@ -46,6 +46,23 @@ That tab also has a **converter**: paste any text, the 1337 version appears unde
 
 Right-click any dictation in History to switch it to 1337, or back.
 
+## Meeting mode
+
+For video calls, Plume can write down **both sides**: what you say (the microphone) and what the others say (the sound coming out of your Mac), live, into a text file.
+
+It is off by default. Turn it on in **Settings → Meetings**, then:
+
+- **hold your dictation key for 3 seconds** to start (a ring fills up, then a small orb appears bottom left), and the same gesture to stop. The length of the hold is adjustable. With a multi-key shortcut there is no long press: start from the menu bar instead;
+- the text appears a moment after each pause, labelled **Me** and **Them** with a timestamp, and is cleaned up paragraph by paragraph a little later (if cleanup is on, otherwise the raw text stays);
+- the orb never takes the focus, and by default it shows up neither in screenshots nor in screen sharing;
+- when you stop, a card offers **Copy**, **Open** and **Paste**. Nothing is pasted by itself.
+
+Every meeting lives in `~/Library/Application Support/Plume/Reunions/`: a `réunion.md` written as it goes (so a crash loses nothing), plus one audio track per side, which you can delete from the **Meetings** page while keeping the text. Deleting a meeting sends it to the Trash. The recording stops by itself if the disk is nearly full, after the maximum length (4 h by default), when the call app closes, and it warns you if a track has been silent for a minute.
+
+The first time, macOS asks for one more permission, **system audio**, separate from the microphone and from screen recording. The sound never leaves your Mac: it is always transcribed by a model on your Mac, and only the text goes to the cleanup service, and only if you turned cleanup on. You can still dictate normally during a meeting.
+
+It needs macOS 14.4 or later (earlier versions don't offer system audio), and the Mac version only.
+
 ## Indicator styles
 
 Settings → Indicator places the pill where you want it: **bottom** (above the Dock, the classic), **top**, or **notch** — a card that slides out of the notch area at the top of the screen. All three use the system's frosted material. On a Mac without a notch, the notch style simply glides in from the top edge.
@@ -71,7 +88,7 @@ Plume checks GitHub for a new version once a day (you can turn that off in Setti
 ## Privacy
 
 - Your voice is processed on your Mac (unless you choose the Online model).
-- The microphone is only open while you dictate.
+- The microphone is only open while you dictate (or during a meeting, if you started one).
 - History (last 200 dictations) and your vocabulary stay in `~/Library/Application Support/Plume`.
 - API keys are stored in the macOS keychain.
 - No analytics, no account, nothing to sign up for.

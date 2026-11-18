@@ -46,6 +46,23 @@ Ce même onglet contient un **convertisseur** : collez n'importe quel texte, la 
 
 Clic droit sur une dictée de l'historique pour la passer en 1337, ou revenir en arrière.
 
+## Mode Réunion
+
+Pour les visios, Plume peut écrire **les deux côtés** : ce que vous dites (le micro) et ce que disent les autres (le son qui sort de votre Mac), en direct, dans un fichier texte.
+
+Il est désactivé par défaut. Activez-le dans **Réglages → Réunions**, puis :
+
+- **tenez votre touche de dictée 3 secondes** pour démarrer (un anneau se remplit, puis une petite orbe apparaît en bas à gauche), et le même geste pour arrêter. La durée de l'appui se règle. Avec un raccourci à plusieurs touches il n'y a pas d'appui long : démarrez par la barre des menus ;
+- le texte apparaît un instant après chaque pause, étiqueté **Moi** et **Eux** avec l'heure, puis il est nettoyé paragraphe par paragraphe un peu plus tard (si le nettoyage est activé, sinon le texte brut reste) ;
+- l'orbe ne prend jamais le focus, et par défaut elle n'apparaît ni dans les captures d'écran ni dans le partage d'écran ;
+- à l'arrêt, une carte propose **Copier**, **Ouvrir** et **Coller**. Rien n'est collé tout seul.
+
+Chaque réunion vit dans `~/Library/Application Support/Plume/Reunions/` : un `réunion.md` écrit au fil de l'eau (un plantage ne fait rien perdre), plus une piste audio par côté, que vous pouvez supprimer depuis la page **Réunions** en gardant le texte. Supprimer une réunion l'envoie à la Corbeille. L'enregistrement s'arrête tout seul si le disque est presque plein, après la durée maximale (4 h par défaut), quand l'app de visio se ferme, et vous prévient si une piste reste muette une minute.
+
+La première fois, macOS demande une autorisation de plus, **audio du système**, distincte du micro et de l'enregistrement d'écran. Le son ne quitte jamais votre Mac : il est toujours transcrit par un modèle sur votre Mac, et seul le texte part au service de nettoyage, et seulement si vous l'avez activé. Vous pouvez toujours dicter normalement pendant une réunion.
+
+Il demande macOS 14.4 ou plus récent (avant, pas d'audio système), et la version Mac seulement.
+
 ## Styles de pastille
 
 Réglages → Pastille place la pastille où vous voulez : **en bas** (au-dessus du Dock, le classique), **en haut**, ou **encoche** — une carte qui sort de la zone d'encoche en haut de l'écran. Les trois utilisent le matériau dépoli du système. Sur un Mac sans encoche, le style encoche glisse simplement depuis le bord supérieur.
@@ -71,7 +88,7 @@ Plume regarde sur GitHub s'il y a une nouvelle version, une fois par jour (désa
 ## Vie privée
 
 - Votre voix est traitée sur votre Mac (sauf si vous choisissez le modèle En ligne).
-- Le micro n'est ouvert que pendant la dictée.
+- Le micro n'est ouvert que pendant la dictée (ou pendant une réunion, si vous en avez lancé une).
 - L'historique (200 dernières dictées) et le vocabulaire restent dans `~/Library/Application Support/Plume`.
 - Les clés API sont rangées dans le trousseau de macOS.
 - Ni statistiques, ni compte.
