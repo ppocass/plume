@@ -133,6 +133,10 @@ kbd {
 .install ol { margin: 0; padding-left: 1.3em; }
 .install li { margin: 0 0 12px; padding-left: 4px; }
 .install .fine { margin-top: 20px; }
+.install h3 { margin: 48px 0 16px; text-align: center; scroll-margin-top: 24px; }
+.install .linux-actions { margin: 0 0 24px; }
+.hero .other-os { margin-top: 6px; }
+.hero .other-os a { color: inherit; }
 
 footer { text-align: center; color: var(--muted); padding: 24px 16px 40px; border-top: 1px solid var(--line); font-size: 0.9rem; }
 

@@ -14,7 +14,29 @@
     if (button) button.textContent = l === 'fr' ? 'EN' : 'FR';
   }
 
+  // Sur Linux, le grand bouton propose directement la version Linux.
+  function linuxVisitor() {
+    var ua = navigator.userAgent || '';
+    return ua.indexOf('Linux') !== -1 && ua.indexOf('Android') === -1;
+  }
+  function useLinuxDownload() {
+    var button = document.getElementById('download');
+    var fine = document.getElementById('hero-fine');
+    var other = document.getElementById('other-os');
+    if (!button || !fine || !other) return;
+    button.href = 'https://github.com/ppocass/plume-universal/releases/latest/download/plume_0.1.1_amd64.deb';
+    button.setAttribute('data-fr', 'Télécharger pour Linux');
+    button.setAttribute('data-en', 'Download for Linux');
+    button.nextElementSibling && (button.nextElementSibling.href = 'https://github.com/ppocass/plume-universal');
+    fine.setAttribute('data-fr', 'Gratuit · version de test · Linux Mint 22, Ubuntu 24.04 ou plus récent');
+    fine.setAttribute('data-en', 'Free · test version · Linux Mint 22, Ubuntu 24.04 or later');
+    other.href = '#install';
+    other.setAttribute('data-fr', 'Sur Mac ? La version Mac est ici →');
+    other.setAttribute('data-en', 'On a Mac? The Mac version is here →');
+  }
+
   document.addEventListener('DOMContentLoaded', function () {
+    if (linuxVisitor()) useLinuxDownload();
     apply(lang);
     document.getElementById('lang').addEventListener('click', function () {
       lang = lang === 'fr' ? 'en' : 'fr';

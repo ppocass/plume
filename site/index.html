@@ -35,7 +35,8 @@
            data-fr="Télécharger pour Mac" data-en="Download for Mac">Download for Mac</a>
         <a class="button" href="https://github.com/ppocass/plume">GitHub</a>
       </div>
-      <p class="fine" data-fr="Gratuit · Mac Apple Silicon · macOS 14 ou plus récent" data-en="Free · Apple Silicon Mac · macOS 14 or later">Free · Apple Silicon Mac · macOS 14 or later</p>
+      <p class="fine" id="hero-fine" data-fr="Gratuit · Mac Apple Silicon · macOS 14 ou plus récent" data-en="Free · Apple Silicon Mac · macOS 14 or later">Free · Apple Silicon Mac · macOS 14 or later</p>
+      <p class="fine other-os"><a href="#linux" id="other-os" data-fr="Sur Linux ? Une version de test existe →" data-en="On Linux? A test version is available →">On Linux? A test version is available →</a></p>
     </section>
 
     <section class="gallery" aria-label="Screenshots">
@@ -119,7 +120,7 @@
       </article>
     </section>
 
-    <section class="install">
+    <section class="install" id="install">
       <h2 data-fr="Installation" data-en="Install">Install</h2>
       <ol>
         <li data-fr="Ouvrez Plume.dmg et glissez Plume dans Applications." data-en="Open Plume.dmg and drag Plume into Applications.">Open Plume.dmg and drag Plume into Applications.</li>
@@ -127,6 +128,18 @@
         <li data-fr="Autorisez le micro et l'accessibilité. L'assistant vous guide et télécharge le modèle de voix." data-en="Allow the microphone and accessibility. The setup guides you and downloads the voice model.">Allow the microphone and accessibility. The setup guides you and downloads the voice model.</li>
       </ol>
       <p class="fine" data-fr="Pourquoi ce blocage ? Plume n'est pas signée avec un compte développeur Apple payant. Le code est public sur GitHub." data-en="Why the warning? Plume isn't signed with a paid Apple developer account. The code is public on GitHub.">Why the warning? Plume isn't signed with a paid Apple developer account. The code is public on GitHub.</p>
+
+      <h3 id="linux" data-fr="Sur Linux (version de test)" data-en="On Linux (test version)">On Linux (test version)</h3>
+      <div class="actions linux-actions">
+        <a class="button primary" href="https://github.com/ppocass/plume-universal/releases/latest/download/plume_0.1.1_amd64.deb" data-fr="Télécharger pour Linux (.deb)" data-en="Download for Linux (.deb)">Download for Linux (.deb)</a>
+        <a class="button" href="https://github.com/ppocass/plume-universal">GitHub</a>
+      </div>
+      <ol>
+        <li data-fr="Double-cliquez sur le fichier : le Gestionnaire de logiciels s'ouvre. Cliquez sur Installer et tapez votre mot de passe." data-en="Double-click the file: the Software Manager opens. Click Install and type your password.">Double-click the file: the Software Manager opens. Click Install and type your password.</li>
+        <li data-fr="Lancez Plume depuis le menu des applications. L'assistant vous guide et télécharge le modèle de voix (640 Mo)." data-en="Open Plume from the applications menu. The setup guides you and downloads the voice model (640 MB).">Open Plume from the applications menu. The setup guides you and downloads the voice model (640 MB).</li>
+        <li data-fr="Appuyez sur Alt gauche, parlez, appuyez à nouveau : le texte s'écrit là où est votre curseur." data-en="Press Left Alt, talk, press it again: the text appears where your cursor is.">Press Left Alt, talk, press it again: the text appears where your cursor is.</li>
+      </ol>
+      <p class="fine" data-fr="Linux Mint 22, Ubuntu 24.04 ou plus récent, session X11. Version de test : pas encore essayée sous Wayland. Windows arrive plus tard." data-en="Linux Mint 22, Ubuntu 24.04 or later, X11 session. Test version: not tried on Wayland yet. Windows comes later.">Linux Mint 22, Ubuntu 24.04 or later, X11 session. Test version: not tried on Wayland yet. Windows comes later.</p>
     </section>
   </main>
 
